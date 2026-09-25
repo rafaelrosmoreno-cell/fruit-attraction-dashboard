@@ -35,10 +35,9 @@ IFEMA_PROGRAM_URL = (
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")
 GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
-EDIT_PASSWORD = st.secrets.get("EDIT_PASSWORD", "")
 
 # ============================================================
-# IMPORTANT EVENTS
+# EVENTS
 # ============================================================
 
 IMPORTANT_EVENTS = [
@@ -49,12 +48,11 @@ IMPORTANT_EVENTS = [
         "location": "Retiro Lounge · IFEMA Madrid",
         "category": "Berries",
         "relevance": "High",
+        "status": "Confirmed",
         "description": (
             "International blueberry industry forum and networking event. "
-            "Highly relevant for growers, operators, genetics and berry investment."
-        ),
-        "status": "Confirmed",
-        "source": "International Blueberry Organization"
+            "Relevant for berry growers, operators, genetics and investors."
+        )
     },
     {
         "date": "6–8 Oct 2026",
@@ -63,65 +61,59 @@ IMPORTANT_EVENTS = [
         "location": "IFEMA Madrid · location TBC",
         "category": "Fresh Produce",
         "relevance": "Medium",
+        "status": "Schedule pending",
         "description": (
-            "IFEMA's gastronomic and product-presentation stage for participating "
-            "Fresh Produce companies."
-        ),
-        "status": "Confirmed · schedule pending",
-        "source": "IFEMA"
+            "Fruit Attraction product-presentation and gastronomy programme."
+        )
     },
     {
         "date": "6–8 Oct 2026",
         "time": "TBC",
-        "title": "Official Fruit Attraction conferences & technical sessions",
+        "title": "Official conferences & technical sessions",
         "location": "IFEMA Madrid",
         "category": "Industry",
         "relevance": "High",
-        "description": (
-            "Congresses, forums, seminars and technical sessions. "
-            "Detailed 2026 programme has not yet been published by IFEMA."
-        ),
         "status": "Programme TBC",
-        "source": "IFEMA"
+        "description": (
+            "Industry forums, technical sessions, seminars and conferences. "
+            "Detailed 2026 programme still pending."
+        )
     }
 ]
 
 # ============================================================
-# CSS
+# STYLE
 # ============================================================
 
-st.markdown(
-    """
-    <style>
+st.markdown("""
+<style>
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
 
-    .main-title {
-        font-size: 42px;
-        font-weight: 750;
-        margin-bottom: 0px;
-    }
+.main-title {
+    font-size: 42px;
+    font-weight: 750;
+    margin-bottom: 0px;
+}
 
-    .subtitle {
-        color: #6b7280;
-        font-size: 16px;
-        margin-top: 2px;
-        margin-bottom: 25px;
-    }
+.subtitle {
+    color: #6b7280;
+    font-size: 16px;
+    margin-top: 2px;
+    margin-bottom: 25px;
+}
 
-    div[data-testid="stMetric"] {
-        border: 1px solid #e5e7eb;
-        padding: 15px;
-        border-radius: 12px;
-    }
+div[data-testid="stMetric"] {
+    border: 1px solid #e5e7eb;
+    padding: 15px;
+    border-radius: 12px;
+}
 
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # HELPERS
@@ -316,7 +308,7 @@ def load_ifema():
 
 
 # ============================================================
-# LOAD TARGETS
+# LOAD SHORTLIST
 # ============================================================
 
 @st.cache_data(ttl=30)
@@ -335,11 +327,7 @@ def load_targets():
 
     df = ensure_target_columns(df)
 
-    # --------------------------------------------------------
-    # INITIAL RANKING
-    # Only applies if rank is blank
-    # --------------------------------------------------------
-
+    # Initial ranking only if rank is blank
     initial_ranking = {
         "hortifrut": 1,
         "citri and co": 2,
@@ -362,13 +350,13 @@ def load_targets():
         if existing:
             return existing
 
-        key = normalise_name(
+        company_key = normalise_name(
             row["company"]
         )
 
         for name, rank in initial_ranking.items():
 
-            if normalise_name(name) in key:
+            if normalise_name(name) in company_key:
                 return str(rank)
 
         return "99"
@@ -386,6 +374,12 @@ def load_targets():
 # ============================================================
 
 def save_to_github(dataframe):
+
+    if not GITHUB_TOKEN:
+
+        return False, (
+            "GITHUB_TOKEN is missing from Streamlit Secrets."
+        )
 
     dataframe = dataframe.copy()
 
@@ -410,12 +404,10 @@ def save_to_github(dataframe):
     )
 
     headers = {
-        "Authorization": (
-            f"Bearer {GITHUB_TOKEN}"
-        ),
-        "Accept": (
+        "Authorization":
+            f"Bearer {GITHUB_TOKEN}",
+        "Accept":
             "application/vnd.github+json"
-        )
     }
 
     current = requests.get(
@@ -426,7 +418,11 @@ def save_to_github(dataframe):
 
     if current.status_code != 200:
 
-        return False, current.text
+        return False, (
+            f"GitHub read error "
+            f"{current.status_code}: "
+            f"{current.text}"
+        )
 
     sha = current.json()["sha"]
 
@@ -435,11 +431,12 @@ def save_to_github(dataframe):
     ).decode("utf-8")
 
     payload = {
-        "message": (
-            "Update Fruit Attraction dashboard"
-        ),
-        "content": encoded,
-        "sha": sha
+        "message":
+            "Update Fruit Attraction dashboard",
+        "content":
+            encoded,
+        "sha":
+            sha
     }
 
     response = requests.put(
@@ -458,11 +455,15 @@ def save_to_github(dataframe):
 
         return True, "Saved"
 
-    return False, response.text
+    return False, (
+        f"GitHub save error "
+        f"{response.status_code}: "
+        f"{response.text}"
+    )
 
 
 # ============================================================
-# NUVEN RELEVANCE ENGINE
+# NUVEN RELEVANCE
 # ============================================================
 
 def calculate_relevance(company, website=""):
@@ -622,13 +623,11 @@ ifema["nuveen_score"] = (
     )
 )
 
-# Selected companies first
 ifema.loc[
     ifema["selected"],
     "nuveen_score"
 ] += 100
 
-# High priority boost
 ifema.loc[
     ifema["priority"] == "High",
     "nuveen_score"
@@ -669,8 +668,22 @@ st.markdown(
 )
 
 # ============================================================
-# KPI CARDS
+# KPIs
 # ============================================================
+
+meetings_count = len(
+    targets[
+        (
+            targets["meeting_date"]
+            != ""
+        )
+        |
+        (
+            targets["meeting_time"]
+            != ""
+        )
+    ]
+)
 
 k1, k2, k3, k4 = (
     st.columns(4)
@@ -698,25 +711,13 @@ k3.metric(
 
 k4.metric(
     "Meetings",
-    len(
-        targets[
-            (
-                targets["meeting_date"]
-                != ""
-            )
-            |
-            (
-                targets["meeting_time"]
-                != ""
-            )
-        ]
-    )
+    meetings_count
 )
 
 st.caption(
-    "IFEMA exhibitor data is "
-    "re-checked automatically every hour "
-    "while the app is being used."
+    "IFEMA exhibitor data is re-checked "
+    "automatically every hour while the "
+    "app is being used."
 )
 
 st.divider()
@@ -744,13 +745,18 @@ st.divider()
 )
 
 # ============================================================
-# TAB 1 — NUVEN SHORTLIST
+# TAB 1 — SHORTLIST
 # ============================================================
 
 with tab1:
 
     st.subheader(
         "Nuveen priority companies"
+    )
+
+    st.caption(
+        "Change the order in "
+        "Manage Shortlist using the Rank column."
     )
 
     view = targets.copy()
@@ -855,16 +861,11 @@ with tab1:
                 else:
 
                     st.warning(
-                        "Location not yet "
-                        "published by IFEMA",
+                        "Location not yet published by IFEMA",
                         icon="⏳"
                     )
 
-                if (
-                    target[
-                        "why_interesting"
-                    ]
-                ):
+                if target["why_interesting"]:
 
                     st.write(
                         target[
@@ -902,9 +903,9 @@ with tab2:
     )
 
     st.caption(
-        "Search the full IFEMA catalogue "
-        "and add companies directly to "
-        "the Nuveen shortlist."
+        "Search the IFEMA catalogue, "
+        "select companies and add them "
+        "directly to the Nuveen shortlist."
     )
 
     search = st.text_input(
@@ -961,7 +962,6 @@ with tab2:
 
     all_view = ifema.copy()
 
-    # Search
     if search:
 
         all_view = (
@@ -976,7 +976,6 @@ with tab2:
             ]
         )
 
-    # Pavilion
     if pavilion_filter:
 
         all_view = (
@@ -988,7 +987,6 @@ with tab2:
             ]
         )
 
-    # Shortlist status
     if (
         selection_filter
         == "Selected"
@@ -1011,7 +1009,6 @@ with tab2:
             ]
         )
 
-    # Location status
     if (
         status_filter
         == "Stand confirmed"
@@ -1036,7 +1033,6 @@ with tab2:
             ]
         )
 
-    # Relevance ordering
     all_view = (
         all_view
         .sort_values(
@@ -1064,7 +1060,6 @@ with tab2:
         )
     )
 
-    # Table
     display = all_view[
         [
             "company",
@@ -1090,7 +1085,7 @@ with tab2:
             display,
             use_container_width=True,
             hide_index=True,
-            height=620,
+            height=480,
             disabled=[
                 "company",
                 "pavilion",
@@ -1108,8 +1103,8 @@ with tab2:
                 st.column_config.CheckboxColumn(
                     "Add",
                     help=(
-                        "Tick companies to add "
-                        "to the shortlist"
+                        "Tick companies "
+                        "to add to shortlist"
                     )
                 ),
 
@@ -1164,198 +1159,168 @@ with tab2:
             edited_exhibitors["add"]
             == True
         ]
+        .drop_duplicates(
+            "company_key"
+        )
         .copy()
     )
 
     if not selected_to_add.empty:
 
-        st.info(
+        st.success(
             f"{len(selected_to_add)} "
             f"company / companies selected."
         )
 
-        with st.expander(
-            "⭐ Add selected companies "
-            "to Nuveen shortlist",
-            expanded=True
+        action1, action2 = (
+            st.columns(
+                [2, 1]
+            )
+        )
+
+        new_priority = (
+            action1.selectbox(
+                "Priority for selected companies",
+                [
+                    "High",
+                    "Medium",
+                    "Low"
+                ],
+                index=1,
+                key="add_priority"
+            )
+        )
+
+        if action2.button(
+            "⭐ Add to shortlist",
+            type="primary",
+            use_container_width=True
         ):
 
-            add_password = (
-                st.text_input(
-                    "Editing password",
-                    type="password",
-                    key=(
-                        "all_exhibitors_password"
+            existing_keys = set(
+                targets[
+                    "company_key"
+                ]
+            )
+
+            ranks = (
+                pd.to_numeric(
+                    targets["rank"],
+                    errors="coerce"
+                )
+            )
+
+            if ranks.notna().any():
+
+                next_rank = (
+                    int(
+                        ranks.max()
                     )
+                    + 1
                 )
-            )
 
-            default_priority = (
-                st.selectbox(
-                    "Initial priority",
-                    [
-                        "High",
-                        "Medium",
-                        "Low"
-                    ],
-                    index=1,
-                    key="bulk_priority"
-                )
-            )
+            else:
 
-            if st.button(
-                "⭐ Add selected to shortlist",
-                type="primary",
-                key="add_from_all"
+                next_rank = 1
+
+            new_rows = []
+
+            for _, row in (
+                selected_to_add
+                .iterrows()
             ):
 
-                if (
-                    add_password
-                    != EDIT_PASSWORD
-                    or not EDIT_PASSWORD
-                ):
+                key = (
+                    row[
+                        "company_key"
+                    ]
+                )
 
-                    st.error(
-                        "Incorrect editing "
-                        "password."
+                if key in existing_keys:
+                    continue
+
+                new_rows.append({
+                    "company":
+                        row["company"],
+                    "rank":
+                        str(next_rank),
+                    "priority":
+                        new_priority,
+                    "type":
+                        "",
+                    "sector":
+                        "",
+                    "why_interesting":
+                        "",
+                    "confirmed_hall":
+                        "",
+                    "confirmed_stand":
+                        "",
+                    "event_info":
+                        "",
+                    "contact":
+                        "",
+                    "meeting_date":
+                        "",
+                    "meeting_time":
+                        "",
+                    "visited":
+                        "No",
+                    "notes":
+                        ""
+                })
+
+                next_rank += 1
+
+                existing_keys.add(
+                    key
+                )
+
+            if not new_rows:
+
+                st.warning(
+                    "The selected companies "
+                    "are already in the shortlist."
+                )
+
+            else:
+
+                updated = pd.concat(
+                    [
+                        targets.drop(
+                            columns=[
+                                "company_key"
+                            ],
+                            errors="ignore"
+                        ),
+                        pd.DataFrame(
+                            new_rows
+                        )
+                    ],
+                    ignore_index=True
+                )
+
+                success, message = (
+                    save_to_github(
+                        updated
                     )
+                )
+
+                if success:
+
+                    st.success(
+                        f"{len(new_rows)} "
+                        f"company / companies added."
+                    )
+
+                    st.cache_data.clear()
+                    st.rerun()
 
                 else:
 
-                    existing_keys = set(
-                        targets[
-                            "company_key"
-                        ]
+                    st.error(
+                        message
                     )
-
-                    ranks = (
-                        pd.to_numeric(
-                            targets["rank"],
-                            errors="coerce"
-                        )
-                    )
-
-                    if (
-                        ranks
-                        .notna()
-                        .any()
-                    ):
-
-                        next_rank = (
-                            int(
-                                ranks.max()
-                            )
-                            + 1
-                        )
-
-                    else:
-
-                        next_rank = 1
-
-                    new_rows = []
-
-                    for _, row in (
-                        selected_to_add
-                        .iterrows()
-                    ):
-
-                        key = (
-                            row[
-                                "company_key"
-                            ]
-                        )
-
-                        if key in existing_keys:
-                            continue
-
-                        new_rows.append({
-                            "company":
-                                row["company"],
-                            "rank":
-                                str(next_rank),
-                            "priority":
-                                default_priority,
-                            "type":
-                                "",
-                            "sector":
-                                "",
-                            "why_interesting":
-                                "",
-                            "confirmed_hall":
-                                "",
-                            "confirmed_stand":
-                                "",
-                            "event_info":
-                                "",
-                            "contact":
-                                "",
-                            "meeting_date":
-                                "",
-                            "meeting_time":
-                                "",
-                            "visited":
-                                "No",
-                            "notes":
-                                ""
-                        })
-
-                        next_rank += 1
-
-                        existing_keys.add(
-                            key
-                        )
-
-                    if not new_rows:
-
-                        st.warning(
-                            "The selected "
-                            "companies are already "
-                            "in the shortlist."
-                        )
-
-                    else:
-
-                        updated = (
-                            pd.concat(
-                                [
-                                    targets.drop(
-                                        columns=[
-                                            "company_key"
-                                        ],
-                                        errors=(
-                                            "ignore"
-                                        )
-                                    ),
-                                    pd.DataFrame(
-                                        new_rows
-                                    )
-                                ],
-                                ignore_index=True
-                            )
-                        )
-
-                        success, message = (
-                            save_to_github(
-                                updated
-                            )
-                        )
-
-                        if success:
-
-                            st.success(
-                                f"{len(new_rows)} "
-                                f"company / companies "
-                                f"added."
-                            )
-
-                            st.cache_data.clear()
-                            st.rerun()
-
-                        else:
-
-                            st.error(
-                                message
-                            )
 
 # ============================================================
 # TAB 3 — BY PAVILION
@@ -1377,8 +1342,7 @@ with tab3:
     if selected_ifema.empty:
 
         st.info(
-            "No shortlist companies "
-            "matched to IFEMA."
+            "No shortlist companies matched to IFEMA."
         )
 
     else:
@@ -1468,7 +1432,7 @@ with tab4:
     )
 
     with st.expander(
-        "➕ Add meeting",
+        "➕ Add / update meeting",
         expanded=True
     ):
 
@@ -1482,111 +1446,119 @@ with tab4:
             .tolist()
         )
 
-        with st.form(
-            "add_meeting_form"
-        ):
+        if not shortlist_companies:
 
-            meeting_company = (
-                st.selectbox(
-                    "Company",
-                    shortlist_companies
-                )
+            st.info(
+                "Add companies to the shortlist first."
             )
 
-            m1, m2 = (
-                st.columns(2)
-            )
+        else:
 
-            meeting_date = (
-                m1.date_input(
-                    "Date"
-                )
-            )
+            with st.form(
+                "add_meeting_form"
+            ):
 
-            meeting_time = (
-                m2.time_input(
-                    "Time"
-                )
-            )
-
-            meeting_contact = (
-                st.text_input(
-                    "Contact"
-                )
-            )
-
-            meeting_notes = (
-                st.text_area(
-                    "Notes",
-                    placeholder=(
-                        "Topics to discuss, "
-                        "meeting point..."
+                meeting_company = (
+                    st.selectbox(
+                        "Company",
+                        shortlist_companies
                     )
                 )
-            )
 
-            submit_meeting = (
-                st.form_submit_button(
-                    "💾 Save meeting",
-                    type="primary"
-                )
-            )
-
-        if submit_meeting:
-
-            updated = (
-                targets.copy()
-            )
-
-            mask = (
-                updated["company"]
-                == meeting_company
-            )
-
-            updated.loc[
-                mask,
-                "meeting_date"
-            ] = meeting_date.strftime(
-                "%d %b %Y"
-            )
-
-            updated.loc[
-                mask,
-                "meeting_time"
-            ] = meeting_time.strftime(
-                "%H:%M"
-            )
-
-            updated.loc[
-                mask,
-                "contact"
-            ] = meeting_contact
-
-            updated.loc[
-                mask,
-                "notes"
-            ] = meeting_notes
-
-            success, message = (
-                save_to_github(
-                    updated
-                )
-            )
-
-            if success:
-
-                st.success(
-                    "Meeting saved."
+                m1, m2 = (
+                    st.columns(2)
                 )
 
-                st.cache_data.clear()
-                st.rerun()
-
-            else:
-
-                st.error(
-                    message
+                meeting_date = (
+                    m1.date_input(
+                        "Date"
+                    )
                 )
+
+                meeting_time = (
+                    m2.time_input(
+                        "Time"
+                    )
+                )
+
+                meeting_contact = (
+                    st.text_input(
+                        "Contact"
+                    )
+                )
+
+                meeting_notes = (
+                    st.text_area(
+                        "Notes",
+                        placeholder=(
+                            "Topics to discuss, "
+                            "meeting point..."
+                        )
+                    )
+                )
+
+                submit_meeting = (
+                    st.form_submit_button(
+                        "💾 Save meeting",
+                        type="primary"
+                    )
+                )
+
+            if submit_meeting:
+
+                updated = (
+                    targets.copy()
+                )
+
+                mask = (
+                    updated["company"]
+                    == meeting_company
+                )
+
+                updated.loc[
+                    mask,
+                    "meeting_date"
+                ] = meeting_date.strftime(
+                    "%d %b %Y"
+                )
+
+                updated.loc[
+                    mask,
+                    "meeting_time"
+                ] = meeting_time.strftime(
+                    "%H:%M"
+                )
+
+                updated.loc[
+                    mask,
+                    "contact"
+                ] = meeting_contact
+
+                updated.loc[
+                    mask,
+                    "notes"
+                ] = meeting_notes
+
+                success, message = (
+                    save_to_github(
+                        updated
+                    )
+                )
+
+                if success:
+
+                    st.success(
+                        "Meeting saved."
+                    )
+
+                    st.cache_data.clear()
+                    st.rerun()
+
+                else:
+
+                    st.error(
+                        message
+                    )
 
     st.divider()
 
@@ -1667,6 +1639,51 @@ with tab4:
                         row["notes"]
                     )
 
+                if st.button(
+                    "🗑 Remove meeting",
+                    key=(
+                        "remove_meeting_"
+                        + row[
+                            "company_key"
+                        ]
+                    )
+                ):
+
+                    updated = (
+                        targets.copy()
+                    )
+
+                    mask = (
+                        updated["company"]
+                        == row["company"]
+                    )
+
+                    updated.loc[
+                        mask,
+                        [
+                            "meeting_date",
+                            "meeting_time",
+                            "contact"
+                        ]
+                    ] = ""
+
+                    success, message = (
+                        save_to_github(
+                            updated
+                        )
+                    )
+
+                    if success:
+
+                        st.cache_data.clear()
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            message
+                        )
+
 # ============================================================
 # TAB 5 — EVENTS
 # ============================================================
@@ -1678,28 +1695,22 @@ with tab5:
     )
 
     st.info(
-        "The full official 2026 conference "
-        "programme has not yet been published. "
-        "Confirmed events are shown below and "
-        "TBC items are clearly marked."
+        "Confirmed information is shown as such. "
+        "Items not yet published by IFEMA remain TBC."
     )
-
-    relevance_order = {
-        "High": 1,
-        "Medium": 2,
-        "Low": 3
-    }
 
     event_df = pd.DataFrame(
         IMPORTANT_EVENTS
     )
 
     event_df["_sort"] = (
-        event_df[
-            "relevance"
-        ]
+        event_df["relevance"]
         .map(
-            relevance_order
+            {
+                "High": 1,
+                "Medium": 2,
+                "Low": 3
+            }
         )
         .fillna(99)
     )
@@ -1728,63 +1739,45 @@ with tab5:
                 f"{event['title']}"
             )
 
-            c1, c2 = (
-                st.columns(
-                    [3, 1]
-                )
+            st.markdown(
+                f"📅 **"
+                f"{event['date']} "
+                f"· {event['time']}**"
             )
 
-            with c1:
+            st.write(
+                f"📍 "
+                f"{event['location']}"
+            )
 
-                st.markdown(
-                    f"📅 **"
-                    f"{event['date']} "
-                    f"· {event['time']}**"
+            st.write(
+                event[
+                    "description"
+                ]
+            )
+
+            st.write(
+                f"**Relevance for Nuveen:** "
+                f"{event['relevance']}"
+            )
+
+            if (
+                event["status"]
+                == "Confirmed"
+            ):
+
+                st.success(
+                    "Confirmed"
                 )
 
-                st.write(
-                    f"📍 "
-                    f"{event['location']}"
-                )
+            else:
 
-                st.write(
-                    event[
-                        "description"
-                    ]
-                )
-
-                st.caption(
-                    f"Source: "
-                    f"{event['source']}"
-                )
-
-            with c2:
-
-                st.write(
-                    f"**Relevance:** "
-                    f"{event['relevance']}"
-                )
-
-                if (
+                st.warning(
                     event["status"]
-                    == "Confirmed"
-                ):
-
-                    st.success(
-                        "Confirmed"
-                    )
-
-                else:
-
-                    st.warning(
-                        event["status"]
-                    )
-
-    st.divider()
+                )
 
     st.markdown(
-        f"🔗 [Open official IFEMA "
-        f"programme]"
+        f"[Open official IFEMA programme]"
         f"({IFEMA_PROGRAM_URL})"
     )
 
@@ -1798,137 +1791,135 @@ with tab6:
         "Manage Nuveen shortlist"
     )
 
-    password = (
-        st.text_input(
-            "Editing password",
-            type="password",
-            key="manage_password"
+    st.caption(
+        "Edit ranking, priority, sector, notes "
+        "or remove companies directly below."
+    )
+
+    editable = (
+        targets.drop(
+            columns=[
+                "company_key"
+            ],
+            errors="ignore"
+        )
+        .copy()
+    )
+
+    editable[
+        "_rank_sort"
+    ] = pd.to_numeric(
+        editable["rank"],
+        errors="coerce"
+    ).fillna(999)
+
+    editable = (
+        editable
+        .sort_values(
+            [
+                "_rank_sort",
+                "company"
+            ]
+        )
+        .drop(
+            columns=[
+                "_rank_sort"
+            ]
         )
     )
 
-    if (
-        password
-        == EDIT_PASSWORD
-        and EDIT_PASSWORD
+    edited = (
+        st.data_editor(
+            editable,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            height=600,
+            column_config={
+
+                "rank":
+                st.column_config.NumberColumn(
+                    "Rank",
+                    min_value=1,
+                    step=1
+                ),
+
+                "priority":
+                st.column_config.SelectboxColumn(
+                    "Priority",
+                    options=[
+                        "High",
+                        "Medium",
+                        "Low"
+                    ]
+                ),
+
+                "visited":
+                st.column_config.SelectboxColumn(
+                    "Visited",
+                    options=[
+                        "No",
+                        "Yes"
+                    ]
+                ),
+
+                "why_interesting":
+                st.column_config.TextColumn(
+                    "Why relevant",
+                    width="large"
+                ),
+
+                "notes":
+                st.column_config.TextColumn(
+                    "Notes",
+                    width="large"
+                )
+            }
+        )
+    )
+
+    st.caption(
+        "To remove a company from the shortlist, "
+        "use the row delete control in the table."
+    )
+
+    if st.button(
+        "💾 Save shortlist changes",
+        type="primary",
+        use_container_width=True
     ):
 
-        st.success(
-            "Editing enabled"
+        # Clean and normalize ranking
+        edited["rank"] = (
+            pd.to_numeric(
+                edited["rank"],
+                errors="coerce"
+            )
+            .fillna(999)
+            .astype(int)
+            .astype(str)
         )
 
-        editable = (
-            targets.drop(
-                columns=[
-                    "company_key"
-                ],
-                errors="ignore"
-            )
-            .copy()
-        )
-
-        editable[
-            "_rank_sort"
-        ] = pd.to_numeric(
-            editable["rank"],
-            errors="coerce"
-        ).fillna(999)
-
-        editable = (
-            editable
-            .sort_values(
-                [
-                    "_rank_sort",
-                    "company"
-                ]
-            )
-            .drop(
-                columns=[
-                    "_rank_sort"
-                ]
+        success, message = (
+            save_to_github(
+                edited
             )
         )
 
-        edited = (
-            st.data_editor(
-                editable,
-                use_container_width=True,
-                hide_index=True,
-                num_rows="dynamic",
-                column_config={
+        if success:
 
-                    "rank":
-                    st.column_config.NumberColumn(
-                        "Rank",
-                        min_value=1,
-                        step=1
-                    ),
-
-                    "priority":
-                    st.column_config.SelectboxColumn(
-                        "Priority",
-                        options=[
-                            "High",
-                            "Medium",
-                            "Low"
-                        ]
-                    ),
-
-                    "visited":
-                    st.column_config.SelectboxColumn(
-                        "Visited",
-                        options=[
-                            "No",
-                            "Yes"
-                        ]
-                    ),
-
-                    "why_interesting":
-                    st.column_config.TextColumn(
-                        "Why relevant",
-                        width="large"
-                    ),
-
-                    "notes":
-                    st.column_config.TextColumn(
-                        "Notes",
-                        width="large"
-                    )
-                }
-            )
-        )
-
-        if st.button(
-            "💾 Save shortlist changes",
-            type="primary",
-            key="save_manage"
-        ):
-
-            success, message = (
-                save_to_github(
-                    edited
-                )
+            st.success(
+                "Shortlist saved."
             )
 
-            if success:
+            st.cache_data.clear()
+            st.rerun()
 
-                st.success(
-                    "Shortlist saved."
-                )
+        else:
 
-                st.cache_data.clear()
-                st.rerun()
-
-            else:
-
-                st.error(
-                    message
-                )
-
-    elif password:
-
-        st.error(
-            "Incorrect password."
-        )
+            st.error(
+                message
+            )
 
 # ============================================================
 # FOOTER
@@ -1938,7 +1929,7 @@ st.divider()
 
 st.caption(
     "IFEMA catalogue re-checked hourly "
-    "while the application is active · "
+    "while the app is active · "
     f"Session refreshed "
     f"{datetime.now().strftime('%d %b %Y %H:%M')}"
 )
