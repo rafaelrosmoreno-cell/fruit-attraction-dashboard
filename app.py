@@ -106,48 +106,14 @@ st.markdown(
 
 /* Main page */
 .block-container {
-    padding-top: 1.25rem !important;
+    padding-top: 1.4rem !important;
     padding-bottom: 2rem !important;
     max-width: 1400px !important;
 }
 
-/* Fixed header — avoids title clipping */
-.header-wrap {
-    width: 100%;
+/* Native Streamlit header: do not clip */
+h2[data-testid="stHeading"] {
     overflow: visible !important;
-    padding-top: 0.35rem;
-    margin-bottom: 1rem;
-}
-
-.header-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    overflow: visible !important;
-}
-
-.header-icon {
-    font-size: 40px;
-    line-height: 1.15;
-    flex-shrink: 0;
-}
-
-.header-title {
-    font-size: 38px;
-    line-height: 1.18;
-    font-weight: 800;
-    color: #2b2f3a;
-    margin: 0;
-    padding: 0.1rem 0 0.2rem 0;
-    overflow: visible !important;
-    white-space: normal !important;
-}
-
-.header-subtitle {
-    font-size: 14px;
-    color: #757b86;
-    margin-top: 6px;
-    line-height: 1.35;
 }
 
 /* Metric cards */
@@ -182,39 +148,20 @@ button[data-baseweb="tab"] {
 @media (max-width: 768px) {
 
     .block-container {
-        padding-top: 0.8rem !important;
+        padding-top: 1.0rem !important;
         padding-left: 0.65rem !important;
         padding-right: 0.65rem !important;
         padding-bottom: 1.5rem !important;
     }
 
-    .header-wrap {
-        padding-top: 0.25rem !important;
-        margin-bottom: 0.75rem !important;
-    }
-
-    .header-row {
-        align-items: center;
-        gap: 7px;
-    }
-
-    .header-icon {
-        font-size: 27px !important;
-        line-height: 1.2 !important;
-    }
-
-    .header-title {
+    h2[data-testid="stHeading"] {
         font-size: 24px !important;
-        line-height: 1.22 !important;
-        font-weight: 800 !important;
-        padding-top: 0.15rem !important;
-        padding-bottom: 0.15rem !important;
-    }
-
-    .header-subtitle {
-        font-size: 11px !important;
         line-height: 1.35 !important;
-        margin-top: 4px !important;
+        margin-top: 0 !important;
+        margin-bottom: 0.15rem !important;
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.15rem !important;
+        overflow: visible !important;
     }
 
     div[data-testid="stMetric"] {
@@ -241,26 +188,15 @@ button[data-baseweb="tab"] {
         min-height: 42px;
     }
 
-    h2 {
-        font-size: 21px !important;
-    }
-
     h3 {
         font-size: 18px !important;
     }
 }
 
 @media (max-width: 390px) {
-    .header-title {
+    h2[data-testid="stHeading"] {
         font-size: 22px !important;
-    }
-
-    .header-icon {
-        font-size: 25px !important;
-    }
-
-    .header-subtitle {
-        font-size: 10px !important;
+        line-height: 1.35 !important;
     }
 }
 
@@ -829,19 +765,10 @@ ifema = (
 # HEADER — FIXED / MOBILE SAFE
 # ============================================================
 
-st.markdown(
-    """
-<div class="header-wrap">
-    <div class="header-row">
-        <div class="header-icon">🌱</div>
-        <div class="header-title">Fruit Attraction 2026</div>
-    </div>
-    <div class="header-subtitle">
-        Iberia Team · IFEMA Madrid · 6–8 October 2026
-    </div>
-</div>
-""",
-    unsafe_allow_html=True,
+st.header("🌱 Fruit Attraction 2026")
+
+st.caption(
+    "Iberia Team · IFEMA Madrid · 6–8 October 2026"
 )
 
 meetings_count = len(
