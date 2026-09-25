@@ -4,6 +4,10 @@ import requests
 import base64
 from datetime import datetime
 
+# ============================================================
+# PAGE
+# ============================================================
+
 st.set_page_config(
     page_title="Fruit Attraction 2026 | Nuveen Natural Capital",
     page_icon="🌱",
@@ -15,6 +19,13 @@ st.set_page_config(
 # ============================================================
 
 CSV_FILE = "targets.csv"
+
+IFEMA_API = (
+    "https://lc-events-web-public.ifema.es/api/v1/"
+    "tenants/3a88c5e5-a6e1-4898-b72b-103e4eed1731/"
+    "editions/900c6c40-ac92-49ea-8ef6-08de63088e5d/"
+    "exhibitors/search?language=es-ES"
+)
 
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")
@@ -77,37 +88,177 @@ st.markdown("""
 .location {
     font-size: 16px;
     font-weight: 600;
-    margin-top: 14px;
+    margin-top: 10px;
 }
 
 .reason {
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
-.event {
-    margin-top: 12px;
-    color: #555;
+.confirmed {
+    color: #17863c;
+    font-weight: 600;
+}
+
+.pending {
+    color: #b77900;
+    font-weight: 600;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# FUNCTIONS
+# HELPERS
+# ============================================================
+
+def clean_company_name(name):
+    return str(name).strip()
+
+
+def normalise_name(name):
+    return (
+        str(name)
+        .strip()
+        .lower()
+        .replace("&", "and")
+        .replace(".", "")
+        .replace(",", "")
+    )
+
+
+def ensure_target_columns(df):
+
+    defaults = {
+        "company": "",
+        "priority": "Medium",
+        "type": "",
+        "sector": "",
+        "why_interesting": "",
+        "confirmed_hall": "",
+        "confirmed_stand": "",
+        "event_info": "",
+        "contact": "",
+        "meeting_date": "",
+        "meeting_time": "",
+        "visited": "No",
+        "notes": ""
+    }
+
+    for col, default in defaults.items():
+
+        if col not in df.columns:
+            df[col] = default
+
+    return df[list(defaults.keys())]
+
+
+# ============================================================
+# IFEMA DATA
+# ============================================================
+
+@st.cache_data(ttl=3600)
+def load_ifema():
+
+    payload = {
+        "page": 0,
+        "pageSize": 10000,
+        "search": "",
+        "dynamicFields": [],
+        "countryIds": [],
+        "categoryIds": []
+    }
+
+    response = requests.post(
+        IFEMA_API,
+        json=payload,
+        timeout=30
+    )
+
+    response.raise_for_status()
+
+    raw = response.json()
+
+    rows = []
+
+    for exhibitor in raw.get("data", []):
+
+        stands = exhibitor.get("standsInfo") or []
+
+        if stands:
+
+            for stand in stands:
+
+                rows.append({
+                    "company": clean_company_name(
+                        exhibitor.get("name", "")
+                    ),
+                    "website": exhibitor.get("link", ""),
+                    "pavilion": stand.get("location", ""),
+                    "stand": stand.get("name", ""),
+                    "ifema_status": "Confirmed by IFEMA",
+                    "ifema_id": exhibitor.get("id", "")
+                })
+
+        else:
+
+            rows.append({
+                "company": clean_company_name(
+                    exhibitor.get("name", "")
+                ),
+                "website": exhibitor.get("link", ""),
+                "pavilion": "",
+                "stand": "",
+                "ifema_status": "Stand not yet published",
+                "ifema_id": exhibitor.get("id", "")
+            })
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return df
+
+    df["company_key"] = (
+        df["company"]
+        .apply(normalise_name)
+    )
+
+    return df
+
+
+# ============================================================
+# TARGET DATA
 # ============================================================
 
 @st.cache_data(ttl=30)
-def load_data():
-    return pd.read_csv(CSV_FILE, dtype=str).fillna("")
+def load_targets():
 
+    df = pd.read_csv(
+        CSV_FILE,
+        dtype=str
+    ).fillna("")
+
+    return ensure_target_columns(df)
+
+
+# ============================================================
+# GITHUB SAVE
+# ============================================================
 
 def save_to_github(dataframe):
 
-    csv_content = dataframe.to_csv(index=False)
+    dataframe = ensure_target_columns(
+        dataframe.copy()
+    )
+
+    csv_content = dataframe.to_csv(
+        index=False
+    )
 
     api_url = (
         f"https://api.github.com/repos/"
-        f"{GITHUB_OWNER}/{GITHUB_REPO}/contents/{CSV_FILE}"
+        f"{GITHUB_OWNER}/{GITHUB_REPO}/"
+        f"contents/{CSV_FILE}"
     )
 
     headers = {
@@ -131,7 +282,7 @@ def save_to_github(dataframe):
     ).decode("utf-8")
 
     payload = {
-        "message": "Update targets from Streamlit dashboard",
+        "message": "Update Fruit Attraction shortlist",
         "content": encoded_content,
         "sha": sha
     }
@@ -144,30 +295,162 @@ def save_to_github(dataframe):
     )
 
     if response.status_code in [200, 201]:
-        load_data.clear()
+
+        load_targets.clear()
+
         return True, "Saved"
 
     return False, response.text
 
 
 # ============================================================
-# DATA
+# RELEVANCE ENGINE
 # ============================================================
 
-df = load_data()
+def calculate_relevance(company, website=""):
+
+    text = (
+        str(company) + " " + str(website)
+    ).lower()
+
+    high_keywords = [
+        "hortifrut",
+        "citri",
+        "agrimarba",
+        "alcoaxarquia",
+        "climate asset",
+        "hsbc",
+        "berries",
+        "berry",
+        "avocado",
+        "aguacate",
+        "citrus",
+        "citricos"
+    ]
+
+    medium_keywords = [
+        "agriculture",
+        "agricola",
+        "agrícola",
+        "fruit",
+        "frutas",
+        "fresh",
+        "produce",
+        "irrigation",
+        "riego",
+        "water",
+        "agua",
+        "genetics",
+        "genetica",
+        "genética",
+        "nursery",
+        "vivero",
+        "farm",
+        "agro"
+    ]
+
+    score = 0
+
+    for keyword in high_keywords:
+        if keyword in text:
+            score += 20
+
+    for keyword in medium_keywords:
+        if keyword in text:
+            score += 5
+
+    return score
+
+
+# ============================================================
+# LOAD
+# ============================================================
+
+try:
+
+    ifema = load_ifema()
+
+except Exception as e:
+
+    st.error(
+        f"Could not connect to IFEMA: {e}"
+    )
+
+    st.stop()
+
+
+targets = load_targets()
+
+targets["company_key"] = (
+    targets["company"]
+    .apply(normalise_name)
+)
+
+# ============================================================
+# COMBINE IFEMA + NUVEN
+# ============================================================
+
+target_lookup = (
+    targets
+    .drop_duplicates("company_key")
+    .set_index("company_key")
+    .to_dict("index")
+)
+
+ifema["selected"] = (
+    ifema["company_key"]
+    .isin(target_lookup.keys())
+)
+
+ifema["priority"] = ifema["company_key"].apply(
+    lambda x:
+    target_lookup.get(x, {}).get(
+        "priority",
+        ""
+    )
+)
+
+ifema["nuveen_score"] = ifema.apply(
+    lambda row:
+    calculate_relevance(
+        row["company"],
+        row["website"]
+    ),
+    axis=1
+)
+
+# Give selected companies a strong boost
+ifema.loc[
+    ifema["selected"],
+    "nuveen_score"
+] += 100
+
+# High priority gets additional boost
+ifema.loc[
+    ifema["priority"] == "High",
+    "nuveen_score"
+] += 50
+
+ifema = ifema.sort_values(
+    ["nuveen_score", "company"],
+    ascending=[False, True]
+)
 
 # ============================================================
 # HEADER
 # ============================================================
 
 st.markdown(
-    '<div class="title">🌱 Fruit Attraction 2026</div>',
+    '<div class="title">'
+    '🌱 Fruit Attraction 2026'
+    '</div>',
     unsafe_allow_html=True
 )
 
 st.markdown(
     '<div class="subtitle">'
-    'Nuveen Natural Capital · IFEMA Madrid · 6–8 October 2026'
+    'Nuveen Natural Capital · IFEMA Madrid · '
+    '6–8 October 2026'
     '</div>',
     unsafe_allow_html=True
 )
@@ -176,206 +459,321 @@ st.markdown(
 # KPIs
 # ============================================================
 
-c1, c2, c3, c4 = st.columns(4)
+k1, k2, k3, k4 = st.columns(4)
 
-c1.metric("Target companies", len(df))
+k1.metric(
+    "IFEMA exhibitors",
+    ifema["company"].nunique()
+)
 
-c2.metric(
+k2.metric(
+    "Nuveen shortlist",
+    len(targets)
+)
+
+k3.metric(
     "High priority",
-    len(df[df["priority"] == "High"])
+    len(
+        targets[
+            targets["priority"] == "High"
+        ]
+    )
 )
 
-c3.metric(
-    "Confirmed stands",
-    len(df[df["confirmed_stand"] != ""])
+k4.metric(
+    "Stands published",
+    len(
+        ifema[
+            ifema["stand"] != ""
+        ]
+    )
 )
 
-c4.metric(
-    "Visited",
-    len(df[df["visited"] == "Yes"])
+st.caption(
+    "IFEMA data refreshes automatically every hour."
 )
 
 st.divider()
-
-# ============================================================
-# FILTERS
-# ============================================================
-
-col1, col2, col3 = st.columns(3)
-
-search = col1.text_input(
-    "Search company",
-    placeholder="Hortifrut, Alcoaxarquia..."
-)
-
-priority_filter = col2.multiselect(
-    "Priority",
-    ["High", "Medium", "Low"],
-    default=["High", "Medium"]
-)
-
-sector_options = sorted(
-    [x for x in df["sector"].unique() if x]
-)
-
-sector_filter = col3.multiselect(
-    "Sector",
-    sector_options,
-    default=sector_options
-)
-
-filtered = df[
-    df["priority"].isin(priority_filter)
-]
-
-if sector_filter:
-    filtered = filtered[
-        filtered["sector"].isin(sector_filter)
-    ]
-
-if search:
-    filtered = filtered[
-        filtered["company"].str.contains(
-            search,
-            case=False,
-            na=False
-        )
-    ]
 
 # ============================================================
 # TABS
 # ============================================================
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "⭐ Priority",
-    "📍 By Hall",
+    "⭐ Nuveen Shortlist",
+    "🌍 All Exhibitors",
+    "📍 By Pavilion",
     "📅 Meetings",
-    "🏢 All Companies",
-    "✏️ Edit"
+    "✏️ Manage Shortlist"
 ])
 
 # ============================================================
-# PRIORITY
+# NUVEN SHORTLIST
 # ============================================================
 
 with tab1:
 
-    order = {
-        "High": 0,
-        "Medium": 1,
-        "Low": 2
+    st.subheader(
+        "Nuveen priority companies"
+    )
+
+    target_view = targets.copy()
+
+    priority_order = {
+        "High": 1,
+        "Medium": 2,
+        "Low": 3
     }
 
-    filtered = filtered.copy()
-
-    filtered["_sort"] = (
-        filtered["priority"]
-        .map(order)
+    target_view["_priority_sort"] = (
+        target_view["priority"]
+        .map(priority_order)
         .fillna(99)
     )
 
-    filtered = filtered.sort_values("_sort")
+    target_view = target_view.sort_values(
+        "_priority_sort"
+    )
 
-    for _, row in filtered.iterrows():
+    for _, target in target_view.iterrows():
 
-        css_class = row["priority"].lower()
+        matches = ifema[
+            ifema["company_key"]
+            == target["company_key"]
+        ]
 
-        hall = (
-            f"Hall {row['confirmed_hall']}"
-            if row["confirmed_hall"]
-            else "Hall TBC"
+        if not matches.empty:
+
+            match = matches.iloc[0]
+
+            pavilion = (
+                match["pavilion"]
+                if match["pavilion"]
+                else "TBC"
+            )
+
+            stand = (
+                match["stand"]
+                if match["stand"]
+                else "TBC"
+            )
+
+            status = match["ifema_status"]
+
+        else:
+
+            pavilion = "TBC"
+            stand = "TBC"
+            status = (
+                "Not currently found "
+                "in IFEMA catalogue"
+            )
+
+        css_class = (
+            target["priority"].lower()
+            if target["priority"]
+            in ["High", "Medium", "Low"]
+            else "medium"
         )
 
-        stand = (
-            f"Stand {row['confirmed_stand']}"
-            if row["confirmed_stand"]
-            else "Stand TBC"
-        )
-
-        event_html = ""
-
-        if row["event_info"]:
-            event_html = (
-                f'<div class="event">'
-                f'📅 {row["event_info"]}'
-                f'</div>'
-            )
-
-        meeting_html = ""
-
-        if row["meeting_date"] or row["meeting_time"]:
-            meeting_html = (
-                f'<div class="event">'
-                f'🤝 Meeting: '
-                f'{row["meeting_date"]} '
-                f'{row["meeting_time"]}'
-                f'</div>'
-            )
-
-        visited_html = ""
-
-        if row["visited"] == "Yes":
-            visited_html = (
-                '<div class="event">'
-                '✅ Visited'
-                '</div>'
-            )
-
-        card = (
-            f'<div class="company-card {css_class}">'
-            f'<div class="company-name">{row["company"]}</div>'
-            f'<div class="small-label">'
-            f'{row["type"]} · {row["sector"]}'
-            f'</div>'
-            f'<div class="location">'
-            f'📍 {hall} · {stand}'
-            f'</div>'
-            f'<div class="reason">'
-            f'{row["why_interesting"]}'
-            f'</div>'
-            f'{event_html}'
-            f'{meeting_html}'
-            f'{visited_html}'
-            f'</div>'
+        status_class = (
+            "confirmed"
+            if "Confirmed" in status
+            else "pending"
         )
 
         st.markdown(
-            card,
+            f"""
+            <div class="company-card {css_class}">
+                <div class="company-name">
+                    {target["company"]}
+                </div>
+
+                <div class="small-label">
+                    {target["sector"]}
+                    · Priority {target["priority"]}
+                </div>
+
+                <div class="location">
+                    📍 Pavilion {pavilion}
+                    · Stand {stand}
+                </div>
+
+                <div class="{status_class}">
+                    {status}
+                </div>
+
+                <div class="reason">
+                    {target["why_interesting"]}
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
 # ============================================================
-# BY HALL
+# ALL EXHIBITORS
 # ============================================================
 
 with tab2:
 
-    located = df[
-        df["confirmed_hall"] != ""
+    st.subheader(
+        f"All IFEMA exhibitors "
+        f"({ifema['company'].nunique():,})"
+    )
+
+    search = st.text_input(
+        "Search all exhibitors",
+        placeholder=(
+            "Hortifrut, Citri&Co, "
+            "avocado, fruit..."
+        )
+    )
+
+    col1, col2 = st.columns(2)
+
+    pavilion_options = sorted(
+        [
+            x for x
+            in ifema["pavilion"].unique()
+            if x
+        ]
+    )
+
+    pavilion_filter = col1.multiselect(
+        "Pavilion",
+        pavilion_options
+    )
+
+    shortlist_filter = col2.selectbox(
+        "Shortlist status",
+        [
+            "All",
+            "Selected only",
+            "Not selected"
+        ]
+    )
+
+    all_view = ifema.copy()
+
+    if search:
+
+        all_view = all_view[
+            all_view["company"]
+            .str.contains(
+                search,
+                case=False,
+                na=False
+            )
+        ]
+
+    if pavilion_filter:
+
+        all_view = all_view[
+            all_view["pavilion"]
+            .isin(pavilion_filter)
+        ]
+
+    if shortlist_filter == "Selected only":
+
+        all_view = all_view[
+            all_view["selected"]
+        ]
+
+    elif shortlist_filter == "Not selected":
+
+        all_view = all_view[
+            ~all_view["selected"]
+        ]
+
+    display_df = all_view[
+        [
+            "company",
+            "pavilion",
+            "stand",
+            "ifema_status",
+            "selected",
+            "priority",
+            "website",
+            "nuveen_score"
+        ]
     ].copy()
 
-    if located.empty:
-        st.info("No confirmed stands yet.")
+    display_df.columns = [
+        "Company",
+        "Pavilion",
+        "Stand",
+        "IFEMA status",
+        "Selected",
+        "Priority",
+        "Website",
+        "Nuveen relevance"
+    ]
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        height=600
+    )
+
+    st.caption(
+        "Nuveen relevance is currently a "
+        "keyword-based screening score. "
+        "Selected companies are ranked first."
+    )
+
+# ============================================================
+# BY PAVILION
+# ============================================================
+
+with tab3:
+
+    selected_ifema = ifema[
+        ifema["selected"]
+    ].copy()
+
+    if selected_ifema.empty:
+
+        st.info(
+            "No selected companies with "
+            "IFEMA data yet."
+        )
 
     else:
-        for hall in sorted(
-            located["confirmed_hall"].unique()
+
+        for pavilion in sorted(
+            selected_ifema[
+                "pavilion"
+            ].unique()
         ):
 
-            st.subheader(
-                f"📍 Hall {hall}"
+            pavilion_name = (
+                pavilion
+                if pavilion
+                else "TBC"
             )
 
-            hall_data = located[
-                located["confirmed_hall"] == hall
+            st.subheader(
+                f"📍 Pavilion {pavilion_name}"
+            )
+
+            pavilion_df = selected_ifema[
+                selected_ifema["pavilion"]
+                == pavilion
             ]
 
-            for _, row in hall_data.iterrows():
+            for _, row in pavilion_df.iterrows():
 
-                st.markdown(
-                    f"**{row['company']}** — "
-                    f"Stand {row['confirmed_stand']} · "
-                    f"{row['sector']}"
+                stand = (
+                    row["stand"]
+                    if row["stand"]
+                    else "TBC"
+                )
+
+                st.write(
+                    f"**{row['company']}** "
+                    f"— Stand {stand}"
                 )
 
             st.divider()
@@ -384,11 +782,11 @@ with tab2:
 # MEETINGS
 # ============================================================
 
-with tab3:
+with tab4:
 
-    meetings = df[
-        (df["meeting_date"] != "")
-        | (df["meeting_time"] != "")
+    meetings = targets[
+        (targets["meeting_date"] != "")
+        | (targets["meeting_time"] != "")
     ]
 
     if meetings.empty:
@@ -406,7 +804,7 @@ with tab3:
             )
 
             st.write(
-                f"{row['meeting_date']} · "
+                f"{row['meeting_date']} "
                 f"{row['meeting_time']}"
             )
 
@@ -423,24 +821,14 @@ with tab3:
             st.divider()
 
 # ============================================================
-# ALL COMPANIES
-# ============================================================
-
-with tab4:
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-# ============================================================
-# EDIT
+# MANAGE SHORTLIST
 # ============================================================
 
 with tab5:
 
-    st.subheader("Edit visit plan")
+    st.subheader(
+        "Manage Nuveen shortlist"
+    )
 
     password = st.text_input(
         "Editing password",
@@ -449,31 +837,119 @@ with tab5:
 
     if password == EDIT_PASSWORD and EDIT_PASSWORD:
 
-        st.success("Editing enabled")
+        st.success(
+            "Editing enabled"
+        )
 
-        editable_columns = [
-            "company",
-            "priority",
-            "type",
-            "sector",
-            "why_interesting",
-            "confirmed_hall",
-            "confirmed_stand",
-            "contact",
-            "meeting_date",
-            "meeting_time",
-            "visited",
-            "notes"
-        ]
+        # -------------------------------
+        # ADD NEW EXHIBITOR
+        # -------------------------------
 
-        edited_df = st.data_editor(
-            df[editable_columns],
+        st.markdown(
+            "### Add company from IFEMA"
+        )
+
+        available = ifema[
+            ~ifema["selected"]
+        ].copy()
+
+        selected_company = st.selectbox(
+            "Choose exhibitor",
+            [""] +
+            sorted(
+                available["company"]
+                .drop_duplicates()
+                .tolist()
+            )
+        )
+
+        new_priority = st.selectbox(
+            "Priority",
+            [
+                "High",
+                "Medium",
+                "Low"
+            ]
+        )
+
+        new_reason = st.text_input(
+            "Why is it relevant?"
+        )
+
+        if st.button(
+            "⭐ Add to Nuveen shortlist"
+        ):
+
+            if selected_company:
+
+                new_row = {
+                    "company": selected_company,
+                    "priority": new_priority,
+                    "type": "",
+                    "sector": "",
+                    "why_interesting": new_reason,
+                    "confirmed_hall": "",
+                    "confirmed_stand": "",
+                    "event_info": "",
+                    "contact": "",
+                    "meeting_date": "",
+                    "meeting_time": "",
+                    "visited": "No",
+                    "notes": ""
+                }
+
+                updated = pd.concat(
+                    [
+                        targets.drop(
+                            columns=["company_key"],
+                            errors="ignore"
+                        ),
+                        pd.DataFrame([new_row])
+                    ],
+                    ignore_index=True
+                )
+
+                success, message = (
+                    save_to_github(updated)
+                )
+
+                if success:
+
+                    st.success(
+                        "Company added."
+                    )
+
+                    st.cache_data.clear()
+                    st.rerun()
+
+                else:
+
+                    st.error(message)
+
+        st.divider()
+
+        # -------------------------------
+        # EDIT EXISTING SHORTLIST
+        # -------------------------------
+
+        st.markdown(
+            "### Edit current shortlist"
+        )
+
+        editable = targets.drop(
+            columns=["company_key"],
+            errors="ignore"
+        ).copy()
+
+        edited = st.data_editor(
+            editable,
             use_container_width=True,
             hide_index=True,
             num_rows="dynamic",
             column_config={
 
-                "priority": st.column_config.SelectboxColumn(
+                "priority":
+                st.column_config.SelectboxColumn(
                     "Priority",
                     options=[
                         "High",
@@ -482,57 +958,30 @@ with tab5:
                     ]
                 ),
 
-                "visited": st.column_config.SelectboxColumn(
+                "visited":
+                st.column_config.SelectboxColumn(
                     "Visited",
                     options=[
                         "No",
                         "Yes"
                     ]
-                ),
-
-                "meeting_date": st.column_config.TextColumn(
-                    "Meeting date"
-                ),
-
-                "meeting_time": st.column_config.TextColumn(
-                    "Meeting time"
-                ),
-
-                "notes": st.column_config.TextColumn(
-                    "Notes",
-                    width="large"
                 )
             }
         )
 
         if st.button(
-            "💾 Save changes",
+            "💾 Save shortlist changes",
             type="primary"
         ):
 
-            event_map = {}
-
-            if "event_info" in df.columns:
-                event_map = (
-                    df.set_index("company")
-                    ["event_info"]
-                    .to_dict()
-                )
-
-            edited_df["event_info"] = (
-                edited_df["company"]
-                .map(event_map)
-                .fillna("")
-            )
-
-            success, message = save_to_github(
-                edited_df
+            success, message = (
+                save_to_github(edited)
             )
 
             if success:
 
                 st.success(
-                    "Changes saved successfully."
+                    "Changes saved."
                 )
 
                 st.cache_data.clear()
@@ -540,9 +989,7 @@ with tab5:
 
             else:
 
-                st.error(
-                    f"Could not save: {message}"
-                )
+                st.error(message)
 
     elif password:
 
@@ -550,10 +997,15 @@ with tab5:
             "Incorrect password."
         )
 
+# ============================================================
+# FOOTER
+# ============================================================
+
 st.divider()
 
 st.caption(
-    "Nuveen Natural Capital · "
-    "Fruit Attraction 2026 · "
+    "IFEMA exhibitor data automatically "
+    "checked hourly · "
+    f"App refreshed "
     f"{datetime.now().strftime('%d %b %Y %H:%M')}"
 )
