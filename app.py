@@ -8,47 +8,81 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------- STYLE ----------
+# ---------------- STYLE ----------------
+
 st.markdown("""
 <style>
+
 .block-container {
     padding-top: 2rem;
     padding-bottom: 3rem;
 }
+
 .title {
     font-size: 40px;
     font-weight: 700;
 }
+
 .subtitle {
     color: #666;
     font-size: 16px;
     margin-bottom: 25px;
 }
+
 .company-card {
     border: 1px solid #e6e6e6;
     border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 12px;
+    padding: 20px;
+    margin-bottom: 14px;
     background-color: white;
 }
+
 .high {
-    border-left: 7px solid #d33;
+    border-left: 7px solid #e53935;
 }
+
 .medium {
-    border-left: 7px solid #e7a61a;
+    border-left: 7px solid #f0a500;
 }
+
+.low {
+    border-left: 7px solid #999999;
+}
+
 .company-name {
-    font-size: 21px;
+    font-size: 22px;
     font-weight: 700;
+    margin-bottom: 4px;
 }
+
 .small-label {
-    color: #777;
-    font-size: 13px;
+    color: #777777;
+    font-size: 14px;
 }
+
+.location {
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 14px;
+}
+
+.reason {
+    margin-top: 12px;
+    font-size: 15px;
+}
+
+.event {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #555;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- HEADER ----------
+
+# ---------------- HEADER ----------------
+
 st.markdown(
     '<div class="title">🌱 Fruit Attraction 2026</div>',
     unsafe_allow_html=True
@@ -59,20 +93,41 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ---------- LOAD DATA ----------
-df = pd.read_csv("targets.csv").fillna("")
 
-# ---------- KPIs ----------
+# ---------------- DATA ----------------
+
+df = pd.read_csv(
+    "targets.csv",
+    dtype=str
+).fillna("")
+
+
+# ---------------- KPIs ----------------
+
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("Target companies", len(df))
-c2.metric("High priority", len(df[df["priority"] == "High"]))
-c3.metric("Confirmed stands", len(df[df["confirmed_stand"] != ""]))
-c4.metric("Event dates", "6–8 Oct")
+
+c2.metric(
+    "High priority",
+    len(df[df["priority"] == "High"])
+)
+
+c3.metric(
+    "Confirmed stands",
+    len(df[df["confirmed_stand"] != ""])
+)
+
+c4.metric(
+    "Event dates",
+    "6–8 Oct"
+)
 
 st.divider()
 
-# ---------- FILTERS ----------
+
+# ---------------- FILTERS ----------------
+
 col1, col2, col3 = st.columns(3)
 
 search = col1.text_input(
@@ -86,7 +141,9 @@ priority_filter = col2.multiselect(
     default=["High", "Medium"]
 )
 
-sector_options = sorted(df["sector"].dropna().unique())
+sector_options = sorted(
+    [x for x in df["sector"].unique() if x]
+)
 
 sector_filter = col3.multiselect(
     "Sector",
@@ -96,8 +153,12 @@ sector_filter = col3.multiselect(
 
 filtered = df[
     df["priority"].isin(priority_filter)
-    & df["sector"].isin(sector_filter)
 ]
+
+if sector_filter:
+    filtered = filtered[
+        filtered["sector"].isin(sector_filter)
+    ]
 
 if search:
     filtered = filtered[
@@ -108,7 +169,9 @@ if search:
         )
     ]
 
-# ---------- TABS ----------
+
+# ---------------- TABS ----------------
+
 tab1, tab2, tab3, tab4 = st.tabs(
     [
         "⭐ Priority",
@@ -118,24 +181,37 @@ tab1, tab2, tab3, tab4 = st.tabs(
     ]
 )
 
-# ---------- PRIORITY ----------
+
+# ---------------- PRIORITY ----------------
+
 with tab1:
 
-    order = {"High": 0, "Medium": 1, "Low": 2}
+    order = {
+        "High": 0,
+        "Medium": 1,
+        "Low": 2
+    }
 
     filtered = filtered.copy()
 
-    filtered["_sort"] = filtered["priority"].map(order)
+    filtered["_sort"] = (
+        filtered["priority"]
+        .map(order)
+        .fillna(99)
+    )
 
     filtered = filtered.sort_values("_sort")
 
     for _, row in filtered.iterrows():
 
-        priority_class = (
-            "high"
-            if row["priority"] == "High"
-            else "medium"
-        )
+        if row["priority"] == "High":
+            priority_class = "high"
+
+        elif row["priority"] == "Medium":
+            priority_class = "medium"
+
+        else:
+            priority_class = "low"
 
         hall = (
             f"Hall {row['confirmed_hall']}"
@@ -149,39 +225,33 @@ with tab1:
             else "Stand TBC"
         )
 
-        event = (
-            f"<br><br>📅 {row['event_info']}"
-            if row["event_info"]
-            else ""
+        event_html = ""
+
+        if row["event_info"]:
+            event_html = (
+                f'<div class="event">'
+                f'📅 {row["event_info"]}'
+                f'</div>'
+            )
+
+        card = (
+            f'<div class="company-card {priority_class}">'
+            f'<div class="company-name">{row["company"]}</div>'
+            f'<div class="small-label">{row["type"]} · {row["sector"]}</div>'
+            f'<div class="location">📍 {hall} · {stand}</div>'
+            f'<div class="reason">{row["why_interesting"]}</div>'
+            f'{event_html}'
+            f'</div>'
         )
 
         st.markdown(
-            f"""
-            <div class="company-card {priority_class}">
-                <div class="company-name">
-                    {row['company']}
-                </div>
-
-                <div class="small-label">
-                    {row['type']} · {row['sector']}
-                </div>
-
-                <br>
-
-                <b>📍 {hall} · {stand}</b>
-
-                <br><br>
-
-                {row['why_interesting']}
-
-                {event}
-
-            </div>
-            """,
+            card,
             unsafe_allow_html=True
         )
 
-# ---------- BY HALL ----------
+
+# ---------------- BY HALL ----------------
+
 with tab2:
 
     located = df[
@@ -196,9 +266,15 @@ with tab2:
 
     else:
 
-        for hall in sorted(located["confirmed_hall"].unique()):
+        hall_list = sorted(
+            located["confirmed_hall"].unique()
+        )
 
-            st.subheader(f"Hall {hall}")
+        for hall in hall_list:
+
+            st.subheader(
+                f"📍 Hall {hall}"
+            )
 
             hall_data = located[
                 located["confirmed_hall"] == hall
@@ -208,13 +284,15 @@ with tab2:
 
                 st.markdown(
                     f"**{row['company']}** — "
-                    f"{row['confirmed_stand']} · "
+                    f"Stand {row['confirmed_stand']} · "
                     f"{row['sector']}"
                 )
 
             st.divider()
 
-# ---------- ALL COMPANIES ----------
+
+# ---------------- ALL COMPANIES ----------------
+
 with tab3:
 
     st.dataframe(
@@ -233,7 +311,9 @@ with tab3:
         hide_index=True
     )
 
-# ---------- EVENTS ----------
+
+# ---------------- EVENTS ----------------
+
 with tab4:
 
     events = df[
@@ -242,22 +322,31 @@ with tab4:
 
     if events.empty:
 
-        st.info("No relevant events identified yet.")
+        st.info(
+            "No relevant events identified yet."
+        )
 
     else:
 
         for _, row in events.iterrows():
 
             st.markdown(
-                f"""
-                ### {row['company']}
-                {row['event_info']}
-                """
+                f"### {row['company']}"
             )
+
+            st.write(
+                row["event_info"]
+            )
+
+            st.divider()
+
+
+# ---------------- FOOTER ----------------
 
 st.divider()
 
 st.caption(
-    f"Nuveen Natural Capital · "
+    "Nuveen Natural Capital · "
+    "Fruit Attraction 2026 · "
     f"Updated {datetime.now().strftime('%d %b %Y %H:%M')}"
 )
