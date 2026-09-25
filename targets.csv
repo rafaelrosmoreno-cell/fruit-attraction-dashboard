@@ -1,11 +1,11 @@
-company,priority,type,sector,why_interesting,confirmed_hall,confirmed_stand,event_info
-Alcoaxarquia,High,Operator,Avocado & Mango,Current / relevant avocado operator,9,9D12,
-Hortifrut,High,Operator,Berries,Large global berry producer and operator,,,Blueberry World Forum - 7 Oct 16:30
-Citri&Co,High,Operator,Citrus,Major Iberian citrus platform,,,
-Agrimarba,High,Operator,Citrus,Citrus grower linked to Citri&Co platform,,,
-Climate Asset Management,High,Investor,Natural Capital,Direct natural-capital peer / investor,,,Attending Fruit Attraction 6-8 Oct
-HSBC,High,Investor,Finance,Relevant through Climate Asset Management partnership,,,
-Veolia Agricultura,Medium,Technical Partner,Water & Agriculture,Water management and high-value crop expertise,8,8C23,
-Fall Creek,Medium,Genetics,Blueberries,Blueberry genetics and global grower network,,,Blueberry World Forum - 7 Oct
-Planasa,Medium,Genetics,Berries,Berry genetics and plant material,,,
-AGQ Labs,Medium,Technical Partner,Agronomy,Soil plant nutrition and agronomic analytics,9,9G24,
+company,priority,type,sector,why_interesting,confirmed_hall,confirmed_stand,event_info,contact,meeting_date,meeting_time,visited,notes
+Alcoaxarquia,High,Operator,Avocado & Mango,Relevant avocado operator,9,9D12,,,,,No,
+Hortifrut,High,Operator,Berries,Major global berry operator,,,Blueberry World Forum - 7 Oct 16:30,,,,No,
+Citri&Co,High,Operator,Citrus,Major Iberian citrus platform,,,,,,,No,
+Agrimarba,High,Operator,Citrus,Citrus grower linked to Citri&Co,,,,,,,No,
+Climate Asset Management,High,Investor,Natural Capital,Natural capital investor / relevant peer,,,Attending Fruit Attraction 6-8 Oct,,,,No,
+HSBC,High,Investor,Finance,Relevant through Climate Asset Management,,,,,,,No,
+Veolia Agricultura,Medium,Technical Partner,Water & Agriculture,Water management and high-value crop expertise,8,8C23,,,,,No,
+Fall Creek,Medium,Genetics,Blueberries,Blueberry genetics and grower network,,,Blueberry World Forum - 7 Oct,,,,No,
+Planasa,Medium,Genetics,Berries,Berry genetics and plant material,,,,,,,No,
+AGQ Labs,Medium,Technical Partner,Agronomy,Soil nutrition and agronomic analytics,9,9G24,,,,,No,
