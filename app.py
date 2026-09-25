@@ -12,7 +12,7 @@ from datetime import datetime
 st.set_page_config(
     page_title="Fruit Attraction 2026 | Nuveen Natural Capital",
     page_icon="🌱",
-    layout="wide"
+    layout="wide",
 )
 
 # ============================================================
@@ -36,8 +36,15 @@ GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")
 GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
 
+# These companies stay visible in All Exhibitors,
+# but are excluded from the working Nuveen shortlist.
+EXCLUDED_SHORTLIST_KEYWORDS = [
+    "agrimarba",
+    "hsbc",
+]
+
 # ============================================================
-# EVENTS
+# IMPORTANT EVENTS
 # ============================================================
 
 IMPORTANT_EVENTS = [
@@ -52,7 +59,7 @@ IMPORTANT_EVENTS = [
         "description": (
             "International blueberry industry forum and networking event. "
             "Relevant for berry growers, operators, genetics and investors."
-        )
+        ),
     },
     {
         "date": "6–8 Oct 2026",
@@ -64,7 +71,7 @@ IMPORTANT_EVENTS = [
         "status": "Schedule pending",
         "description": (
             "Fruit Attraction product-presentation and gastronomy programme."
-        )
+        ),
     },
     {
         "date": "6–8 Oct 2026",
@@ -77,52 +84,112 @@ IMPORTANT_EVENTS = [
         "description": (
             "Industry forums, technical sessions, seminars and conferences. "
             "Detailed 2026 programme still pending."
-        )
-    }
+        ),
+    },
 ]
 
 # ============================================================
-# STYLE
+# RESPONSIVE STYLE
 # ============================================================
 
-st.markdown("""
+st.markdown(
+    """
 <style>
 
 .block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
+    padding-top: 1.6rem;
+    padding-bottom: 2.5rem;
+    max-width: 1500px;
 }
 
 .main-title {
     font-size: 42px;
     font-weight: 750;
-    margin-bottom: 0px;
+    margin-bottom: 0;
+    line-height: 1.1;
 }
 
 .subtitle {
     color: #6b7280;
     font-size: 16px;
-    margin-top: 2px;
-    margin-bottom: 25px;
+    margin-top: 4px;
+    margin-bottom: 22px;
 }
 
 div[data-testid="stMetric"] {
     border: 1px solid #e5e7eb;
-    padding: 15px;
+    padding: 14px;
     border-radius: 12px;
 }
 
+div[data-testid="stDataFrame"] {
+    overflow-x: auto;
+}
+
+.stButton > button {
+    border-radius: 10px;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+
+    .block-container {
+        padding-top: 0.8rem;
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+        padding-bottom: 2rem;
+    }
+
+    .main-title {
+        font-size: 30px;
+    }
+
+    .subtitle {
+        font-size: 13px;
+        margin-bottom: 14px;
+    }
+
+    div[data-testid="stMetric"] {
+        padding: 9px;
+    }
+
+    div[data-testid="stMetricLabel"] p {
+        font-size: 11px !important;
+    }
+
+    div[data-testid="stMetricValue"] {
+        font-size: 22px !important;
+    }
+
+    button[data-baseweb="tab"] {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+        font-size: 12px !important;
+        white-space: nowrap;
+    }
+
+    div[data-baseweb="tab-list"] {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .stButton > button {
+        width: 100%;
+        min-height: 44px;
+    }
+}
+
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ============================================================
 # HELPERS
 # ============================================================
 
 def clean_text(value):
-    if value is None:
-        return ""
-    return str(value).strip()
+    return "" if value is None else str(value).strip()
 
 
 def normalise_name(value):
@@ -137,28 +204,51 @@ def normalise_name(value):
         "ú": "u",
         "ü": "u",
         "ñ": "n",
-        "&": "and"
+        "&": "and",
     }
 
     for old, new in replacements.items():
         value = value.replace(old, new)
 
-    value = re.sub(r"[^a-z0-9]+", " ", value)
+    value = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        value
+    )
 
-    return " ".join(value.split())
+    return " ".join(
+        value.split()
+    )
+
+
+def is_excluded_from_shortlist(company):
+
+    key = normalise_name(company)
+
+    return any(
+        normalise_name(word) in key
+        for word in EXCLUDED_SHORTLIST_KEYWORDS
+    )
 
 
 def pavilion_sort_key(value):
 
-    value = clean_text(value).upper()
+    value = clean_text(
+        value
+    ).upper()
 
     if not value:
         return 999
 
-    match = re.search(r"\d+", value)
+    match = re.search(
+        r"\d+",
+        value
+    )
 
     if match:
-        return int(match.group())
+        return int(
+            match.group()
+        )
 
     return 998
 
@@ -179,7 +269,7 @@ def ensure_target_columns(df):
         "meeting_date": "",
         "meeting_time": "",
         "visited": "No",
-        "notes": ""
+        "notes": "",
     }
 
     for column, default in defaults.items():
@@ -195,7 +285,82 @@ def ensure_target_columns(df):
             .astype(str)
         )
 
-    return df[list(defaults.keys())]
+    return df[
+        list(defaults.keys())
+    ]
+
+
+def reorder_shortlist(
+    df,
+    company,
+    new_position
+):
+
+    work = df.copy()
+
+    work["_rank_num"] = (
+        pd.to_numeric(
+            work["rank"],
+            errors="coerce"
+        )
+        .fillna(999)
+    )
+
+    work = (
+        work
+        .sort_values(
+            [
+                "_rank_num",
+                "company"
+            ]
+        )
+        .reset_index(drop=True)
+    )
+
+    moving = work[
+        work["company"]
+        == company
+    ].copy()
+
+    remaining = work[
+        work["company"]
+        != company
+    ].copy()
+
+    if moving.empty:
+        return df
+
+    position = (
+        max(
+            1,
+            min(
+                int(new_position),
+                len(work)
+            )
+        )
+        - 1
+    )
+
+    reordered = pd.concat(
+        [
+            remaining.iloc[:position],
+            moving,
+            remaining.iloc[position:]
+        ],
+        ignore_index=True
+    )
+
+    reordered["rank"] = [
+        str(i + 1)
+        for i in range(
+            len(reordered)
+        )
+    ]
+
+    return reordered.drop(
+        columns=["_rank_num"],
+        errors="ignore"
+    )
 
 
 # ============================================================
@@ -211,7 +376,7 @@ def load_ifema():
         "search": "",
         "dynamicFields": [],
         "countryIds": [],
-        "categoryIds": []
+        "categoryIds": [],
     }
 
     response = requests.post(
@@ -231,7 +396,10 @@ def load_ifema():
 
     rows = []
 
-    for exhibitor in result.get("data", []):
+    for exhibitor in result.get(
+        "data",
+        []
+    ):
 
         company = clean_text(
             exhibitor.get("name")
@@ -246,7 +414,9 @@ def load_ifema():
         )
 
         stands = (
-            exhibitor.get("standsInfo")
+            exhibitor.get(
+                "standsInfo"
+            )
             or []
         )
 
@@ -255,32 +425,68 @@ def load_ifema():
             for stand in stands:
 
                 rows.append({
-                    "company": company,
-                    "company_key": normalise_name(company),
-                    "website": website,
-                    "pavilion": clean_text(
-                        stand.get("location")
-                    ),
-                    "stand": clean_text(
-                        stand.get("name")
-                    ),
-                    "ifema_status": "Confirmed by IFEMA",
-                    "ifema_id": exhibitor_id
+                    "company":
+                        company,
+
+                    "company_key":
+                        normalise_name(
+                            company
+                        ),
+
+                    "website":
+                        website,
+
+                    "pavilion":
+                        clean_text(
+                            stand.get(
+                                "location"
+                            )
+                        ),
+
+                    "stand":
+                        clean_text(
+                            stand.get(
+                                "name"
+                            )
+                        ),
+
+                    "ifema_status":
+                        "Confirmed by IFEMA",
+
+                    "ifema_id":
+                        exhibitor_id,
                 })
 
         else:
 
             rows.append({
-                "company": company,
-                "company_key": normalise_name(company),
-                "website": website,
-                "pavilion": "",
-                "stand": "",
-                "ifema_status": "Stand not yet published",
-                "ifema_id": exhibitor_id
+                "company":
+                    company,
+
+                "company_key":
+                    normalise_name(
+                        company
+                    ),
+
+                "website":
+                    website,
+
+                "pavilion":
+                    "",
+
+                "stand":
+                    "",
+
+                "ifema_status":
+                    "Stand not yet published",
+
+                "ifema_id":
+                    exhibitor_id,
             })
 
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(
+        rows
+    )
 
     if df.empty:
 
@@ -292,7 +498,7 @@ def load_ifema():
                 "pavilion",
                 "stand",
                 "ifema_status",
-                "ifema_id"
+                "ifema_id",
             ]
         )
 
@@ -304,7 +510,10 @@ def load_ifema():
             .astype(str)
         )
 
-    return df, total_elements
+    return (
+        df,
+        total_elements
+    )
 
 
 # ============================================================
@@ -325,18 +534,28 @@ def load_targets():
 
         df = pd.DataFrame()
 
-    df = ensure_target_columns(df)
+    df = ensure_target_columns(
+        df
+    )
 
-    # Initial ranking only if rank is blank
+    # Remove Agrimarba and HSBC from shortlist
+    df = df[
+        ~df["company"]
+        .apply(
+            is_excluded_from_shortlist
+        )
+    ].copy()
+
     initial_ranking = {
         "hortifrut": 1,
         "citri and co": 2,
         "climate asset management": 3,
-        "alcoaxarquia": 4,
-        "veolia agricultura": 5,
-        "fall creek": 6,
-        "planasa": 7,
-        "agq labs": 8
+        "surexport": 4,
+        "alcoaxarquia": 5,
+        "veolia agricultura": 6,
+        "fall creek": 7,
+        "planasa": 8,
+        "agq labs": 9,
     }
 
     def assign_rank(row):
@@ -348,13 +567,20 @@ def load_targets():
         if existing:
             return existing
 
-        company_key = normalise_name(
-            row["company"]
+        company_key = (
+            normalise_name(
+                row["company"]
+            )
         )
 
-        for name, rank in initial_ranking.items():
+        for name, rank in (
+            initial_ranking.items()
+        ):
 
-            if normalise_name(name) in company_key:
+            if (
+                normalise_name(name)
+                in company_key
+            ):
                 return str(rank)
 
         return "99"
@@ -371,27 +597,48 @@ def load_targets():
 # SAVE TO GITHUB
 # ============================================================
 
-def save_to_github(dataframe):
+def save_to_github(
+    dataframe
+):
 
     if not GITHUB_TOKEN:
 
-        return False, (
-            "GITHUB_TOKEN is missing from Streamlit Secrets."
+        return (
+            False,
+            "GITHUB_TOKEN is missing "
+            "from Streamlit Secrets."
         )
 
-    dataframe = dataframe.copy()
-
-    dataframe = dataframe.drop(
-        columns=["company_key"],
-        errors="ignore"
+    dataframe = (
+        dataframe.copy()
     )
 
-    dataframe = ensure_target_columns(
-        dataframe
+    dataframe = dataframe[
+        ~dataframe["company"]
+        .apply(
+            is_excluded_from_shortlist
+        )
+    ].copy()
+
+    dataframe = (
+        dataframe.drop(
+            columns=[
+                "company_key"
+            ],
+            errors="ignore"
+        )
     )
 
-    csv_content = dataframe.to_csv(
-        index=False
+    dataframe = (
+        ensure_target_columns(
+            dataframe
+        )
+    )
+
+    csv_content = (
+        dataframe.to_csv(
+            index=False
+        )
     )
 
     url = (
@@ -404,8 +651,9 @@ def save_to_github(dataframe):
     headers = {
         "Authorization":
             f"Bearer {GITHUB_TOKEN}",
+
         "Accept":
-            "application/vnd.github+json"
+            "application/vnd.github+json",
     }
 
     current = requests.get(
@@ -416,25 +664,37 @@ def save_to_github(dataframe):
 
     if current.status_code != 200:
 
-        return False, (
+        return (
+            False,
             f"GitHub read error "
             f"{current.status_code}: "
             f"{current.text}"
         )
 
-    sha = current.json()["sha"]
+    sha = current.json()[
+        "sha"
+    ]
 
-    encoded = base64.b64encode(
-        csv_content.encode("utf-8")
-    ).decode("utf-8")
+    encoded = (
+        base64.b64encode(
+            csv_content.encode(
+                "utf-8"
+            )
+        )
+        .decode(
+            "utf-8"
+        )
+    )
 
     payload = {
         "message":
             "Update Fruit Attraction dashboard",
+
         "content":
             encoded,
+
         "sha":
-            sha
+            sha,
     }
 
     response = requests.put(
@@ -451,9 +711,13 @@ def save_to_github(dataframe):
 
         load_targets.clear()
 
-        return True, "Saved"
+        return (
+            True,
+            "Saved"
+        )
 
-    return False, (
+    return (
+        False,
         f"GitHub save error "
         f"{response.status_code}: "
         f"{response.text}"
@@ -461,10 +725,13 @@ def save_to_github(dataframe):
 
 
 # ============================================================
-# NUVEN RELEVANCE
+# RELEVANCE ENGINE
 # ============================================================
 
-def calculate_relevance(company, website=""):
+def calculate_relevance(
+    company,
+    website=""
+):
 
     text = (
         clean_text(company)
@@ -477,11 +744,9 @@ def calculate_relevance(company, website=""):
     strategic = [
         "hortifrut",
         "citri",
-        "agrimarba",
         "alcoaxarquia",
         "climate asset",
-        "hsbc",
-        "surexport"
+        "surexport",
     ]
 
     high_crop = [
@@ -500,7 +765,7 @@ def calculate_relevance(company, website=""):
         "kiwi",
         "almond",
         "walnut",
-        "olive"
+        "olive",
     ]
 
     agriculture = [
@@ -515,7 +780,7 @@ def calculate_relevance(company, website=""):
         "riego",
         "nursery",
         "genetic",
-        "vivero"
+        "vivero",
     ]
 
     for keyword in strategic:
@@ -549,7 +814,8 @@ try:
 except Exception as error:
 
     st.error(
-        "Could not connect to the IFEMA catalogue."
+        "Could not connect "
+        "to the IFEMA catalogue."
     )
 
     st.code(
@@ -563,11 +829,13 @@ targets = load_targets()
 
 targets["company_key"] = (
     targets["company"]
-    .apply(normalise_name)
+    .apply(
+        normalise_name
+    )
 )
 
 # ============================================================
-# MERGE IFEMA + SHORTLIST
+# MERGE
 # ============================================================
 
 target_lookup = (
@@ -595,8 +863,14 @@ ifema["priority"] = (
     .apply(
         lambda key:
         target_lookup
-        .get(key, {})
-        .get("priority", "")
+        .get(
+            key,
+            {}
+        )
+        .get(
+            "priority",
+            ""
+        )
     )
 )
 
@@ -605,8 +879,14 @@ ifema["rank"] = (
     .apply(
         lambda key:
         target_lookup
-        .get(key, {})
-        .get("rank", "")
+        .get(
+            key,
+            {}
+        )
+        .get(
+            "rank",
+            ""
+        )
     )
 )
 
@@ -627,7 +907,8 @@ ifema.loc[
 ] += 100
 
 ifema.loc[
-    ifema["priority"] == "High",
+    ifema["priority"]
+    == "High",
     "nuveen_score"
 ] += 40
 
@@ -665,19 +946,19 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ============================================================
-# KPIs
-# ============================================================
-
 meetings_count = len(
     targets[
         (
-            targets["meeting_date"]
+            targets[
+                "meeting_date"
+            ]
             != ""
         )
         |
         (
-            targets["meeting_time"]
+            targets[
+                "meeting_time"
+            ]
             != ""
         )
     ]
@@ -714,8 +995,8 @@ k4.metric(
 
 st.caption(
     "IFEMA exhibitor data is re-checked "
-    "automatically every hour while the "
-    "app is being used."
+    "automatically every hour while "
+    "the app is being used."
 )
 
 st.divider()
@@ -733,12 +1014,12 @@ st.divider()
     tab6
 ) = st.tabs(
     [
-        "⭐ Nuveen Shortlist",
-        "🌍 All Exhibitors",
-        "📍 By Pavilion",
+        "⭐ Shortlist",
+        "🌍 Exhibitors",
+        "📍 Pavilion",
         "📅 Meetings",
-        "🎤 Events & Talks",
-        "✏️ Manage Shortlist"
+        "🎤 Events",
+        "✏️ Manage",
     ]
 )
 
@@ -750,11 +1031,6 @@ with tab1:
 
     st.subheader(
         "Nuveen priority companies"
-    )
-
-    st.caption(
-        "Change the order in "
-        "Manage Shortlist using the Rank column."
     )
 
     view = targets.copy()
@@ -774,7 +1050,9 @@ with tab1:
         ]
     )
 
-    for _, target in view.iterrows():
+    for _, target in (
+        view.iterrows()
+    ):
 
         matches = ifema[
             ifema["company_key"]
@@ -789,14 +1067,12 @@ with tab1:
 
             pavilion = (
                 match["pavilion"]
-                if match["pavilion"]
-                else "TBC"
+                or "TBC"
             )
 
             stand = (
                 match["stand"]
-                if match["stand"]
-                else "TBC"
+                or "TBC"
             )
 
             confirmed = bool(
@@ -818,79 +1094,73 @@ with tab1:
             border=True
         ):
 
-            left, right = (
-                st.columns(
-                    [5, 1]
-                )
+            st.markdown(
+                f"### #{target['rank']} · "
+                f"{target['company']}"
             )
 
-            with left:
+            sector = (
+                target["sector"]
+                or "Sector TBC"
+            )
+
+            st.caption(
+                f"{sector} · "
+                f"Priority "
+                f"{target['priority']}"
+            )
+
+            st.markdown(
+                f"📍 **Pavilion "
+                f"{pavilion} · "
+                f"Stand {stand}**"
+            )
+
+            if confirmed:
+
+                st.success(
+                    "Confirmed by IFEMA",
+                    icon="✅"
+                )
+
+            else:
+
+                st.warning(
+                    "Location not yet "
+                    "published by IFEMA",
+                    icon="⏳"
+                )
+
+            if (
+                target[
+                    "why_interesting"
+                ]
+            ):
+
+                st.write(
+                    target[
+                        "why_interesting"
+                    ]
+                )
+
+            if website:
 
                 st.markdown(
-                    f"### #{target['rank']} · "
-                    f"{target['company']}"
+                    f"[Company website]"
+                    f"({website})"
                 )
 
-                sector = (
-                    target["sector"]
-                    if target["sector"]
-                    else "Sector TBC"
-                )
+            if (
+                target["visited"]
+                == "Yes"
+            ):
 
                 st.caption(
-                    f"{sector} · "
-                    f"Priority "
-                    f"{target['priority']}"
+                    "✅ Visited"
                 )
-
-                st.markdown(
-                    f"📍 **Pavilion "
-                    f"{pavilion} · "
-                    f"Stand {stand}**"
-                )
-
-                if confirmed:
-
-                    st.success(
-                        "Confirmed by IFEMA",
-                        icon="✅"
-                    )
-
-                else:
-
-                    st.warning(
-                        "Location not yet published by IFEMA",
-                        icon="⏳"
-                    )
-
-                if target["why_interesting"]:
-
-                    st.write(
-                        target[
-                            "why_interesting"
-                        ]
-                    )
-
-                if website:
-
-                    st.markdown(
-                        f"[Company website]"
-                        f"({website})"
-                    )
-
-            with right:
-
-                if (
-                    target["visited"]
-                    == "Yes"
-                ):
-
-                    st.success(
-                        "Visited"
-                    )
 
 # ============================================================
-# TAB 2 — ALL EXHIBITORS
+# TAB 2 — EXHIBITORS
 # ============================================================
 
 with tab2:
@@ -901,9 +1171,8 @@ with tab2:
     )
 
     st.caption(
-        "Search the IFEMA catalogue, "
-        "select companies and add them "
-        "directly to the Nuveen shortlist."
+        "Search and add companies "
+        "directly to the shortlist."
     )
 
     search = st.text_input(
@@ -912,21 +1181,22 @@ with tab2:
             "Hortifrut, Surexport, "
             "avocado, berries..."
         ),
-        key="all_search"
-    )
-
-    f1, f2, f3 = (
-        st.columns(3)
+        key="all_search",
     )
 
     pavilion_options = sorted(
         {
             clean_text(x)
-            for x
-            in ifema["pavilion"]
+            for x in ifema[
+                "pavilion"
+            ]
             if clean_text(x)
         },
-        key=pavilion_sort_key
+        key=pavilion_sort_key,
+    )
+
+    f1, f2 = (
+        st.columns(2)
     )
 
     pavilion_filter = (
@@ -947,89 +1217,48 @@ with tab2:
         )
     )
 
-    status_filter = (
-        f3.selectbox(
-            "IFEMA location",
-            [
-                "All",
-                "Stand confirmed",
-                "Stand pending"
-            ]
-        )
+    all_view = (
+        ifema.copy()
     )
-
-    all_view = ifema.copy()
 
     if search:
 
-        all_view = (
-            all_view[
-                all_view["company"]
-                .str.contains(
-                    search,
-                    case=False,
-                    na=False,
-                    regex=False
-                )
-            ]
-        )
+        all_view = all_view[
+            all_view["company"]
+            .str.contains(
+                search,
+                case=False,
+                na=False,
+                regex=False
+            )
+        ]
 
     if pavilion_filter:
 
-        all_view = (
-            all_view[
-                all_view["pavilion"]
-                .isin(
-                    pavilion_filter
-                )
-            ]
-        )
+        all_view = all_view[
+            all_view["pavilion"]
+            .isin(
+                pavilion_filter
+            )
+        ]
 
     if (
         selection_filter
         == "Selected"
     ):
 
-        all_view = (
-            all_view[
-                all_view["selected"]
-            ]
-        )
+        all_view = all_view[
+            all_view["selected"]
+        ]
 
     elif (
         selection_filter
         == "Not selected"
     ):
 
-        all_view = (
-            all_view[
-                ~all_view["selected"]
-            ]
-        )
-
-    if (
-        status_filter
-        == "Stand confirmed"
-    ):
-
-        all_view = (
-            all_view[
-                all_view["stand"]
-                != ""
-            ]
-        )
-
-    elif (
-        status_filter
-        == "Stand pending"
-    ):
-
-        all_view = (
-            all_view[
-                all_view["stand"]
-                == ""
-            ]
-        )
+        all_view = all_view[
+            ~all_view["selected"]
+        ]
 
     all_view = (
         all_view
@@ -1045,46 +1274,230 @@ with tab2:
                 True
             ]
         )
-    )
-
-    all_view = (
-        all_view
         .drop_duplicates(
-            subset=[
-                "company_key",
-                "pavilion",
-                "stand"
-            ]
+            "company_key"
         )
     )
 
-    display = all_view[
-        [
-            "company",
-            "pavilion",
-            "stand",
-            "ifema_status",
-            "selected",
-            "priority",
-            "website",
-            "nuveen_score",
-            "company_key"
-        ]
-    ].copy()
-
-    display.insert(
-        0,
-        "add",
-        False
+    default_priority = (
+        st.selectbox(
+            "Priority when adding",
+            [
+                "High",
+                "Medium",
+                "Low"
+            ],
+            index=1,
+            key="mobile_add_priority",
+        )
     )
 
-    edited_exhibitors = (
-        st.data_editor(
-            display,
-            use_container_width=True,
-            hide_index=True,
-            height=480,
-            disabled=[
+    mobile_view = (
+        st.toggle(
+            "📱 Mobile-friendly cards",
+            value=True
+        )
+    )
+
+    # --------------------------------------------------------
+    # MOBILE / CARD VIEW
+    # --------------------------------------------------------
+
+    if mobile_view:
+
+        result_count = len(
+            all_view
+        )
+
+        st.caption(
+            f"{result_count} result(s). "
+            f"Showing up to 50."
+        )
+
+        for _, row in (
+            all_view
+            .head(50)
+            .iterrows()
+        ):
+
+            with st.container(
+                border=True
+            ):
+
+                st.markdown(
+                    f"### {row['company']}"
+                )
+
+                location = (
+                    f"{row['pavilion'] or 'TBC'} "
+                    f"· "
+                    f"{row['stand'] or 'TBC'}"
+                )
+
+                st.write(
+                    f"📍 **{location}**"
+                )
+
+                st.caption(
+                    row["ifema_status"]
+                )
+
+                if row["website"]:
+
+                    st.markdown(
+                        f"[Website]"
+                        f"({row['website']})"
+                    )
+
+                st.write(
+                    f"Nuveen relevance: "
+                    f"**"
+                    f"{int(row['nuveen_score'])}"
+                    f"**"
+                )
+
+                if row["selected"]:
+
+                    st.success(
+                        f"Already in shortlist "
+                        f"· Priority "
+                        f"{row['priority']}"
+                    )
+
+                else:
+
+                    if (
+                        is_excluded_from_shortlist(
+                            row["company"]
+                        )
+                    ):
+
+                        st.caption(
+                            "Not included in "
+                            "the working shortlist."
+                        )
+
+                    elif st.button(
+                        "⭐ Add to shortlist",
+                        key=(
+                            "mobile_add_"
+                            + row[
+                                "company_key"
+                            ]
+                        ),
+                        use_container_width=True,
+                    ):
+
+                        ranks = (
+                            pd.to_numeric(
+                                targets["rank"],
+                                errors="coerce"
+                            )
+                        )
+
+                        if (
+                            ranks
+                            .notna()
+                            .any()
+                        ):
+
+                            next_rank = (
+                                int(
+                                    ranks.max()
+                                )
+                                + 1
+                            )
+
+                        else:
+
+                            next_rank = 1
+
+                        new_row = {
+                            "company":
+                                row["company"],
+
+                            "rank":
+                                str(next_rank),
+
+                            "priority":
+                                default_priority,
+
+                            "type":
+                                "",
+
+                            "sector":
+                                "",
+
+                            "why_interesting":
+                                "",
+
+                            "confirmed_hall":
+                                "",
+
+                            "confirmed_stand":
+                                "",
+
+                            "event_info":
+                                "",
+
+                            "contact":
+                                "",
+
+                            "meeting_date":
+                                "",
+
+                            "meeting_time":
+                                "",
+
+                            "visited":
+                                "No",
+
+                            "notes":
+                                "",
+                        }
+
+                        updated = (
+                            pd.concat(
+                                [
+                                    targets.drop(
+                                        columns=[
+                                            "company_key"
+                                        ],
+                                        errors="ignore"
+                                    ),
+                                    pd.DataFrame(
+                                        [new_row]
+                                    )
+                                ],
+                                ignore_index=True
+                            )
+                        )
+
+                        success, message = (
+                            save_to_github(
+                                updated
+                            )
+                        )
+
+                        if success:
+
+                            st.cache_data.clear()
+                            st.rerun()
+
+                        else:
+
+                            st.error(
+                                message
+                            )
+
+    # --------------------------------------------------------
+    # DESKTOP TABLE
+    # --------------------------------------------------------
+
+    else:
+
+        display = all_view[
+            [
                 "company",
                 "pavilion",
                 "stand",
@@ -1093,231 +1506,262 @@ with tab2:
                 "priority",
                 "website",
                 "nuveen_score",
-                "company_key"
-            ],
-            column_config={
+                "company_key",
+            ]
+        ].copy()
 
-                "add":
-                st.column_config.CheckboxColumn(
-                    "Add",
-                    help=(
-                        "Tick companies "
-                        "to add to shortlist"
-                    )
-                ),
-
-                "company":
-                st.column_config.TextColumn(
-                    "Company",
-                    width="large"
-                ),
-
-                "pavilion":
-                st.column_config.TextColumn(
-                    "Pavilion"
-                ),
-
-                "stand":
-                st.column_config.TextColumn(
-                    "Stand"
-                ),
-
-                "ifema_status":
-                st.column_config.TextColumn(
-                    "IFEMA status"
-                ),
-
-                "selected":
-                st.column_config.CheckboxColumn(
-                    "Already selected"
-                ),
-
-                "priority":
-                st.column_config.TextColumn(
-                    "Priority"
-                ),
-
-                "website":
-                st.column_config.LinkColumn(
-                    "Website"
-                ),
-
-                "nuveen_score":
-                st.column_config.NumberColumn(
-                    "Nuveen relevance"
-                ),
-
-                "company_key": None
-            }
-        )
-    )
-
-    selected_to_add = (
-        edited_exhibitors[
-            edited_exhibitors["add"]
-            == True
-        ]
-        .drop_duplicates(
-            "company_key"
-        )
-        .copy()
-    )
-
-    if not selected_to_add.empty:
-
-        st.success(
-            f"{len(selected_to_add)} "
-            f"company / companies selected."
+        display.insert(
+            0,
+            "add",
+            False
         )
 
-        action1, action2 = (
-            st.columns(
-                [2, 1]
-            )
-        )
+        edited_exhibitors = (
+            st.data_editor(
+                display,
+                use_container_width=True,
+                hide_index=True,
+                height=500,
 
-        new_priority = (
-            action1.selectbox(
-                "Priority for selected companies",
-                [
-                    "High",
-                    "Medium",
-                    "Low"
+                disabled=[
+                    "company",
+                    "pavilion",
+                    "stand",
+                    "ifema_status",
+                    "selected",
+                    "priority",
+                    "website",
+                    "nuveen_score",
+                    "company_key",
                 ],
-                index=1,
-                key="add_priority"
+
+                column_config={
+
+                    "add":
+                    st.column_config.CheckboxColumn(
+                        "Add"
+                    ),
+
+                    "company":
+                    st.column_config.TextColumn(
+                        "Company",
+                        width="large"
+                    ),
+
+                    "pavilion":
+                    st.column_config.TextColumn(
+                        "Pavilion"
+                    ),
+
+                    "stand":
+                    st.column_config.TextColumn(
+                        "Stand"
+                    ),
+
+                    "ifema_status":
+                    st.column_config.TextColumn(
+                        "IFEMA status"
+                    ),
+
+                    "selected":
+                    st.column_config.CheckboxColumn(
+                        "Selected"
+                    ),
+
+                    "priority":
+                    st.column_config.TextColumn(
+                        "Priority"
+                    ),
+
+                    "website":
+                    st.column_config.LinkColumn(
+                        "Website"
+                    ),
+
+                    "nuveen_score":
+                    st.column_config.NumberColumn(
+                        "Relevance"
+                    ),
+
+                    "company_key":
+                        None,
+                },
             )
         )
 
-        if action2.button(
-            "⭐ Add to shortlist",
-            type="primary",
-            use_container_width=True
+        selected_to_add = (
+            edited_exhibitors[
+                edited_exhibitors[
+                    "add"
+                ]
+                == True
+            ]
+            .drop_duplicates(
+                "company_key"
+            )
+        )
+
+        if (
+            not selected_to_add.empty
         ):
 
-            existing_keys = set(
-                targets[
-                    "company_key"
-                ]
+            st.success(
+                f"{len(selected_to_add)} "
+                f"company / companies "
+                f"selected."
             )
 
-            ranks = (
-                pd.to_numeric(
-                    targets["rank"],
-                    errors="coerce"
-                )
-            )
-
-            if ranks.notna().any():
-
-                next_rank = (
-                    int(
-                        ranks.max()
-                    )
-                    + 1
-                )
-
-            else:
-
-                next_rank = 1
-
-            new_rows = []
-
-            for _, row in (
-                selected_to_add
-                .iterrows()
+            if st.button(
+                "⭐ Add selected "
+                "to shortlist",
+                type="primary",
+                use_container_width=True,
             ):
 
-                key = (
-                    row[
+                existing_keys = set(
+                    targets[
                         "company_key"
                     ]
                 )
 
-                if key in existing_keys:
-                    continue
-
-                new_rows.append({
-                    "company":
-                        row["company"],
-                    "rank":
-                        str(next_rank),
-                    "priority":
-                        new_priority,
-                    "type":
-                        "",
-                    "sector":
-                        "",
-                    "why_interesting":
-                        "",
-                    "confirmed_hall":
-                        "",
-                    "confirmed_stand":
-                        "",
-                    "event_info":
-                        "",
-                    "contact":
-                        "",
-                    "meeting_date":
-                        "",
-                    "meeting_time":
-                        "",
-                    "visited":
-                        "No",
-                    "notes":
-                        ""
-                })
-
-                next_rank += 1
-
-                existing_keys.add(
-                    key
+                ranks = (
+                    pd.to_numeric(
+                        targets["rank"],
+                        errors="coerce"
+                    )
                 )
 
-            if not new_rows:
+                if (
+                    ranks
+                    .notna()
+                    .any()
+                ):
 
-                st.warning(
-                    "The selected companies "
-                    "are already in the shortlist."
-                )
-
-            else:
-
-                updated = pd.concat(
-                    [
-                        targets.drop(
-                            columns=[
-                                "company_key"
-                            ],
-                            errors="ignore"
-                        ),
-                        pd.DataFrame(
-                            new_rows
+                    next_rank = (
+                        int(
+                            ranks.max()
                         )
-                    ],
-                    ignore_index=True
-                )
-
-                success, message = (
-                    save_to_github(
-                        updated
+                        + 1
                     )
-                )
-
-                if success:
-
-                    st.success(
-                        f"{len(new_rows)} "
-                        f"company / companies added."
-                    )
-
-                    st.cache_data.clear()
-                    st.rerun()
 
                 else:
 
-                    st.error(
-                        message
+                    next_rank = 1
+
+                new_rows = []
+
+                for _, row in (
+                    selected_to_add
+                    .iterrows()
+                ):
+
+                    key = (
+                        row[
+                            "company_key"
+                        ]
+                    )
+
+                    if (
+                        key
+                        in existing_keys
+                        or
+                        is_excluded_from_shortlist(
+                            row["company"]
+                        )
+                    ):
+
+                        continue
+
+                    new_rows.append({
+                        "company":
+                            row["company"],
+
+                        "rank":
+                            str(next_rank),
+
+                        "priority":
+                            default_priority,
+
+                        "type":
+                            "",
+
+                        "sector":
+                            "",
+
+                        "why_interesting":
+                            "",
+
+                        "confirmed_hall":
+                            "",
+
+                        "confirmed_stand":
+                            "",
+
+                        "event_info":
+                            "",
+
+                        "contact":
+                            "",
+
+                        "meeting_date":
+                            "",
+
+                        "meeting_time":
+                            "",
+
+                        "visited":
+                            "No",
+
+                        "notes":
+                            "",
+                    })
+
+                    next_rank += 1
+
+                    existing_keys.add(
+                        key
+                    )
+
+                if new_rows:
+
+                    updated = (
+                        pd.concat(
+                            [
+                                targets.drop(
+                                    columns=[
+                                        "company_key"
+                                    ],
+                                    errors="ignore"
+                                ),
+                                pd.DataFrame(
+                                    new_rows
+                                )
+                            ],
+                            ignore_index=True
+                        )
+                    )
+
+                    success, message = (
+                        save_to_github(
+                            updated
+                        )
+                    )
+
+                    if success:
+
+                        st.cache_data.clear()
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            message
+                        )
+
+                else:
+
+                    st.warning(
+                        "Nothing new to add."
                     )
 
 # ============================================================
@@ -1340,7 +1784,8 @@ with tab3:
     if selected_ifema.empty:
 
         st.info(
-            "No shortlist companies matched to IFEMA."
+            "No shortlist companies "
+            "matched to IFEMA."
         )
 
     else:
@@ -1364,8 +1809,7 @@ with tab3:
 
             pavilion_label = (
                 pavilion
-                if pavilion
-                else "TBC"
+                or "TBC"
             )
 
             st.markdown(
@@ -1386,7 +1830,9 @@ with tab3:
             pavilion_df[
                 "_rank"
             ] = pd.to_numeric(
-                pavilion_df["rank"],
+                pavilion_df[
+                    "rank"
+                ],
                 errors="coerce"
             ).fillna(999)
 
@@ -1407,8 +1853,7 @@ with tab3:
 
                 stand = (
                     row["stand"]
-                    if row["stand"]
-                    else "TBC"
+                    or "TBC"
                 )
 
                 st.markdown(
@@ -1447,7 +1892,8 @@ with tab4:
         if not shortlist_companies:
 
             st.info(
-                "Add companies to the shortlist first."
+                "Add companies to "
+                "the shortlist first."
             )
 
         else:
@@ -1463,18 +1909,14 @@ with tab4:
                     )
                 )
 
-                m1, m2 = (
-                    st.columns(2)
-                )
-
                 meeting_date = (
-                    m1.date_input(
+                    st.date_input(
                         "Date"
                     )
                 )
 
                 meeting_time = (
-                    m2.time_input(
+                    st.time_input(
                         "Time"
                     )
                 )
@@ -1545,10 +1987,6 @@ with tab4:
 
                 if success:
 
-                    st.success(
-                        "Meeting saved."
-                    )
-
                     st.cache_data.clear()
                     st.rerun()
 
@@ -1565,13 +2003,15 @@ with tab4:
             (
                 targets[
                     "meeting_date"
-                ] != ""
+                ]
+                != ""
             )
             |
             (
                 targets[
                     "meeting_time"
-                ] != ""
+                ]
+                != ""
             )
         ]
         .copy()
@@ -1585,21 +2025,12 @@ with tab4:
 
     else:
 
-        meetings["_rank"] = (
-            pd.to_numeric(
-                meetings["rank"],
-                errors="coerce"
-            )
-            .fillna(999)
-        )
-
         meetings = (
             meetings
             .sort_values(
                 [
                     "meeting_date",
-                    "meeting_time",
-                    "_rank"
+                    "meeting_time"
                 ]
             )
         )
@@ -1644,7 +2075,8 @@ with tab4:
                         + row[
                             "company_key"
                         ]
-                    )
+                    ),
+                    use_container_width=True,
                 ):
 
                     updated = (
@@ -1693,16 +2125,21 @@ with tab5:
     )
 
     st.info(
-        "Confirmed information is shown as such. "
-        "Items not yet published by IFEMA remain TBC."
+        "Confirmed information is "
+        "shown as such. Items not yet "
+        "published by IFEMA remain TBC."
     )
 
-    event_df = pd.DataFrame(
-        IMPORTANT_EVENTS
+    event_df = (
+        pd.DataFrame(
+            IMPORTANT_EVENTS
+        )
     )
 
     event_df["_sort"] = (
-        event_df["relevance"]
+        event_df[
+            "relevance"
+        ]
         .map(
             {
                 "High": 1,
@@ -1780,7 +2217,7 @@ with tab5:
     )
 
 # ============================================================
-# TAB 6 — MANAGE SHORTLIST
+# TAB 6 — MANAGE
 # ============================================================
 
 with tab6:
@@ -1790,8 +2227,139 @@ with tab6:
     )
 
     st.caption(
-        "Edit ranking, priority, sector, notes "
-        "or remove companies directly below."
+        "Mobile-friendly controls first; "
+        "full table below."
+    )
+
+    ordered = (
+        targets.copy()
+    )
+
+    ordered[
+        "_rank_num"
+    ] = pd.to_numeric(
+        ordered["rank"],
+        errors="coerce"
+    ).fillna(999)
+
+    ordered = (
+        ordered
+        .sort_values(
+            [
+                "_rank_num",
+                "company"
+            ]
+        )
+    )
+
+    # --------------------------------------------------------
+    # QUICK REORDER
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### ↕️ Quick reorder"
+    )
+
+    company_to_move = (
+        st.selectbox(
+            "Company to move",
+            ordered[
+                "company"
+            ].tolist(),
+            key="reorder_company",
+        )
+    )
+
+    current_rank_row = (
+        ordered[
+            ordered["company"]
+            == company_to_move
+        ]
+    )
+
+    current_rank_value = (
+        pd.to_numeric(
+            current_rank_row[
+                "rank"
+            ],
+            errors="coerce"
+        )
+    )
+
+    if (
+        not current_rank_row.empty
+        and
+        pd.notna(
+            current_rank_value.iloc[0]
+        )
+    ):
+
+        current_rank = int(
+            current_rank_value.iloc[0]
+        )
+
+    else:
+
+        current_rank = 1
+
+    new_position = (
+        st.number_input(
+            "New position",
+            min_value=1,
+            max_value=max(
+                1,
+                len(ordered)
+            ),
+            value=max(
+                1,
+                min(
+                    current_rank,
+                    len(ordered)
+                )
+            ),
+            step=1,
+        )
+    )
+
+    if st.button(
+        "↕️ Move company",
+        type="primary",
+        use_container_width=True,
+    ):
+
+        reordered = (
+            reorder_shortlist(
+                targets,
+                company_to_move,
+                new_position
+            )
+        )
+
+        success, message = (
+            save_to_github(
+                reordered
+            )
+        )
+
+        if success:
+
+            st.cache_data.clear()
+            st.rerun()
+
+        else:
+
+            st.error(
+                message
+            )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # FULL EDIT
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### ✏️ Full edit"
     )
 
     editable = (
@@ -1832,7 +2400,8 @@ with tab6:
             use_container_width=True,
             hide_index=True,
             num_rows="dynamic",
-            height=600,
+            height=520,
+
             column_config={
 
                 "rank":
@@ -1871,24 +2440,20 @@ with tab6:
                 st.column_config.TextColumn(
                     "Notes",
                     width="large"
-                )
-            }
+                ),
+            },
         )
-    )
-
-    st.caption(
-        "To remove a company from the shortlist, "
-        "use the row delete control in the table."
     )
 
     if st.button(
         "💾 Save shortlist changes",
         type="primary",
-        use_container_width=True
+        use_container_width=True,
     ):
 
-        # Clean and normalize ranking
-        edited["rank"] = (
+        edited[
+            "rank"
+        ] = (
             pd.to_numeric(
                 edited["rank"],
                 errors="coerce"
@@ -1898,6 +2463,13 @@ with tab6:
             .astype(str)
         )
 
+        edited = edited[
+            ~edited["company"]
+            .apply(
+                is_excluded_from_shortlist
+            )
+        ].copy()
+
         success, message = (
             save_to_github(
                 edited
@@ -1905,10 +2477,6 @@ with tab6:
         )
 
         if success:
-
-            st.success(
-                "Shortlist saved."
-            )
 
             st.cache_data.clear()
             st.rerun()
