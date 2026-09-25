@@ -10,7 +10,7 @@ from datetime import datetime
 # ============================================================
 
 st.set_page_config(
-    page_title="Fruit Attraction 2026 | Nuveen Natural Capital",
+    page_title="Fruit Attraction 2026 | Iberia Team",
     page_icon="🌱",
     layout="wide",
 )
@@ -36,8 +36,6 @@ GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")
 GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
 
-# These companies stay visible in All Exhibitors,
-# but are excluded from the working Nuveen shortlist.
 EXCLUDED_SHORTLIST_KEYWORDS = [
     "agrimarba",
     "hsbc",
@@ -97,23 +95,9 @@ st.markdown(
 <style>
 
 .block-container {
-    padding-top: 1.6rem;
+    padding-top: 1rem;
     padding-bottom: 2.5rem;
     max-width: 1500px;
-}
-
-.main-title {
-    font-size: 42px;
-    font-weight: 750;
-    margin-bottom: 0;
-    line-height: 1.1;
-}
-
-.subtitle {
-    color: #6b7280;
-    font-size: 16px;
-    margin-top: 4px;
-    margin-bottom: 22px;
 }
 
 div[data-testid="stMetric"] {
@@ -130,23 +114,24 @@ div[data-testid="stDataFrame"] {
     border-radius: 10px;
 }
 
-/* Mobile */
 @media (max-width: 768px) {
 
     .block-container {
-        padding-top: 0.8rem;
-        padding-left: 0.8rem;
-        padding-right: 0.8rem;
+        padding-top: 0.5rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
         padding-bottom: 2rem;
     }
 
-    .main-title {
-        font-size: 30px;
+    h1 {
+        font-size: 28px !important;
+        line-height: 1.15 !important;
+        margin-bottom: 0.25rem !important;
     }
 
-    .subtitle {
-        font-size: 13px;
-        margin-bottom: 14px;
+    div[data-testid="stCaptionContainer"] p {
+        font-size: 12px !important;
+        line-height: 1.3 !important;
     }
 
     div[data-testid="stMetric"] {
@@ -362,7 +347,6 @@ def reorder_shortlist(
         errors="ignore"
     )
 
-
 # ============================================================
 # LOAD IFEMA
 # ============================================================
@@ -515,7 +499,6 @@ def load_ifema():
         total_elements
     )
 
-
 # ============================================================
 # LOAD SHORTLIST
 # ============================================================
@@ -538,7 +521,6 @@ def load_targets():
         df
     )
 
-    # Remove Agrimarba and HSBC from shortlist
     df = df[
         ~df["company"]
         .apply(
@@ -591,7 +573,6 @@ def load_targets():
     )
 
     return df
-
 
 # ============================================================
 # SAVE TO GITHUB
@@ -723,7 +704,6 @@ def save_to_github(
         f"{response.text}"
     )
 
-
 # ============================================================
 # RELEVANCE ENGINE
 # ============================================================
@@ -799,7 +779,6 @@ def calculate_relevance(
             score += 5
 
     return score
-
 
 # ============================================================
 # LOAD DATA
@@ -930,20 +909,12 @@ ifema = (
 # HEADER
 # ============================================================
 
-st.markdown(
-    '<div class="main-title">'
-    '🌱 Fruit Attraction 2026'
-    '</div>',
-    unsafe_allow_html=True
+st.title(
+    "🌱 Fruit Attraction 2026"
 )
 
-st.markdown(
-    '<div class="subtitle">'
-    'Nuveen Natural Capital · '
-    'IFEMA Madrid · '
-    '6–8 October 2026'
-    '</div>',
-    unsafe_allow_html=True
+st.caption(
+    "Iberia Team · IFEMA Madrid · 6–8 October 2026"
 )
 
 meetings_count = len(
@@ -964,9 +935,8 @@ meetings_count = len(
     ]
 )
 
-k1, k2, k3, k4 = (
-    st.columns(4)
-)
+# KPI row 1
+k1, k2 = st.columns(2)
 
 k1.metric(
     "IFEMA exhibitors",
@@ -974,9 +944,12 @@ k1.metric(
 )
 
 k2.metric(
-    "Nuveen shortlist",
+    "Iberia shortlist",
     len(targets)
 )
+
+# KPI row 2
+k3, k4 = st.columns(2)
 
 k3.metric(
     "High priority",
@@ -1030,7 +1003,7 @@ st.divider()
 with tab1:
 
     st.subheader(
-        "Nuveen priority companies"
+        "Iberia priority companies"
     )
 
     view = targets.copy()
@@ -1172,7 +1145,7 @@ with tab2:
 
     st.caption(
         "Search and add companies "
-        "directly to the shortlist."
+        "directly to the Iberia shortlist."
     )
 
     search = st.text_input(
@@ -1299,10 +1272,6 @@ with tab2:
         )
     )
 
-    # --------------------------------------------------------
-    # MOBILE / CARD VIEW
-    # --------------------------------------------------------
-
     if mobile_view:
 
         result_count = len(
@@ -1350,7 +1319,7 @@ with tab2:
                     )
 
                 st.write(
-                    f"Nuveen relevance: "
+                    f"Iberia relevance: "
                     f"**"
                     f"{int(row['nuveen_score'])}"
                     f"**"
@@ -1489,10 +1458,6 @@ with tab2:
                             st.error(
                                 message
                             )
-
-    # --------------------------------------------------------
-    # DESKTOP TABLE
-    # --------------------------------------------------------
 
     else:
 
@@ -2192,7 +2157,7 @@ with tab5:
             )
 
             st.write(
-                f"**Relevance for Nuveen:** "
+                f"**Relevance for Iberia Team:** "
                 f"{event['relevance']}"
             )
 
@@ -2223,7 +2188,7 @@ with tab5:
 with tab6:
 
     st.subheader(
-        "Manage Nuveen shortlist"
+        "Manage Iberia shortlist"
     )
 
     st.caption(
@@ -2251,10 +2216,6 @@ with tab6:
             ]
         )
     )
-
-    # --------------------------------------------------------
-    # QUICK REORDER
-    # --------------------------------------------------------
 
     st.markdown(
         "### ↕️ Quick reorder"
@@ -2353,10 +2314,6 @@ with tab6:
             )
 
     st.divider()
-
-    # --------------------------------------------------------
-    # FULL EDIT
-    # --------------------------------------------------------
 
     st.markdown(
         "### ✏️ Full edit"
