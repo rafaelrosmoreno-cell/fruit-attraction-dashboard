@@ -902,6 +902,117 @@ with tab3:
 
 with tab4:
 
+    st.subheader("Meetings")
+
+    # --------------------------------
+    # ADD MEETING FORM
+    # --------------------------------
+
+    with st.expander("➕ Add meeting", expanded=True):
+
+        shortlist_companies = (
+            targets
+            .sort_values("company")["company"]
+            .tolist()
+        )
+
+        with st.form("add_meeting_form"):
+
+            meeting_company = st.selectbox(
+                "Company",
+                shortlist_companies
+            )
+
+            col1, col2 = st.columns(2)
+
+            meeting_date = col1.date_input(
+                "Date"
+            )
+
+            meeting_time = col2.time_input(
+                "Time"
+            )
+
+            meeting_contact = st.text_input(
+                "Contact"
+            )
+
+            meeting_notes = st.text_area(
+                "Notes",
+                placeholder=(
+                    "What to discuss, contact details, "
+                    "meeting point..."
+                )
+            )
+
+            submit_meeting = st.form_submit_button(
+                "💾 Save meeting",
+                type="primary"
+            )
+
+        if submit_meeting:
+
+            updated = targets.copy()
+
+            mask = (
+                updated["company"]
+                == meeting_company
+            )
+
+            updated.loc[
+                mask,
+                "meeting_date"
+            ] = meeting_date.strftime(
+                "%d %b %Y"
+            )
+
+            updated.loc[
+                mask,
+                "meeting_time"
+            ] = meeting_time.strftime(
+                "%H:%M"
+            )
+
+            updated.loc[
+                mask,
+                "contact"
+            ] = meeting_contact
+
+            updated.loc[
+                mask,
+                "notes"
+            ] = meeting_notes
+
+            updated = updated.drop(
+                columns=["company_key"],
+                errors="ignore"
+            )
+
+            success, message = save_to_github(
+                updated
+            )
+
+            if success:
+
+                st.success(
+                    "Meeting saved."
+                )
+
+                st.cache_data.clear()
+                st.rerun()
+
+            else:
+
+                st.error(
+                    f"Could not save meeting: {message}"
+                )
+
+    st.divider()
+
+    # --------------------------------
+    # EXISTING MEETINGS
+    # --------------------------------
+
     meetings = targets[
         (targets["meeting_date"] != "")
         | (targets["meeting_time"] != "")
@@ -921,32 +1032,49 @@ with tab4:
         ).fillna(999)
 
         meetings = meetings.sort_values(
-            ["meeting_date", "meeting_time", "_rank"]
+            [
+                "meeting_date",
+                "meeting_time",
+                "_rank"
+            ]
         )
 
         for _, row in meetings.iterrows():
 
             with st.container(border=True):
 
-                st.markdown(
-                    f"### 🤝 {row['company']}"
+                c1, c2 = st.columns(
+                    [5, 1]
                 )
 
-                st.write(
-                    f"**{row['meeting_date']} "
-                    f"{row['meeting_time']}**"
-                )
+                with c1:
 
-                if row["contact"]:
-                    st.write(
-                        f"Contact: {row['contact']}"
+                    st.markdown(
+                        f"### 🤝 {row['company']}"
                     )
 
-                if row["notes"]:
-                    st.write(
-                        row["notes"]
+                    st.markdown(
+                        f"**📅 {row['meeting_date']} "
+                        f"· 🕐 {row['meeting_time']}**"
                     )
 
+                    if row["contact"]:
+                        st.write(
+                            f"**Contact:** "
+                            f"{row['contact']}"
+                        )
+
+                    if row["notes"]:
+                        st.write(
+                            row["notes"]
+                        )
+
+                with c2:
+
+                    st.write(
+                        f"Priority: "
+                        f"**{row['priority']}**"
+                    )
 # ============================================================
 # MANAGE SHORTLIST
 # ============================================================
