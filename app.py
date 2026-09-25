@@ -331,14 +331,12 @@ def load_targets():
     initial_ranking = {
         "hortifrut": 1,
         "citri and co": 2,
-        "agrimarba": 3,
-        "climate asset management": 4,
-        "hsbc": 5,
-        "alcoaxarquia": 6,
-        "veolia agricultura": 7,
-        "fall creek": 8,
-        "planasa": 9,
-        "agq labs": 10
+        "climate asset management": 3,
+        "alcoaxarquia": 4,
+        "veolia agricultura": 5,
+        "fall creek": 6,
+        "planasa": 7,
+        "agq labs": 8
     }
 
     def assign_rank(row):
