@@ -4,7 +4,11 @@ import requests
 import base64
 import re
 from datetime import datetime
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 
 # ============================================================
@@ -38,7 +42,6 @@ IFEMA_PROGRAM_URL = (
 GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
 GITHUB_OWNER = st.secrets.get("GITHUB_OWNER", "")
 GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
-
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 
 EXCLUDED_SHORTLIST_KEYWORDS = [
@@ -48,7 +51,7 @@ EXCLUDED_SHORTLIST_KEYWORDS = [
 
 
 # ============================================================
-# EVENTS
+# IMPORTANT EVENTS
 # ============================================================
 
 IMPORTANT_EVENTS = [
@@ -101,39 +104,61 @@ st.markdown(
     """
 <style>
 
+/* Main page */
 .block-container {
-    padding-top: 0.8rem !important;
+    padding-top: 1.25rem !important;
     padding-bottom: 2rem !important;
     max-width: 1400px !important;
 }
 
-/* Header */
+/* Fixed header — avoids title clipping */
+.header-wrap {
+    width: 100%;
+    overflow: visible !important;
+    padding-top: 0.35rem;
+    margin-bottom: 1rem;
+}
 
-.fa-title {
+.header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: visible !important;
+}
+
+.header-icon {
+    font-size: 40px;
+    line-height: 1.15;
+    flex-shrink: 0;
+}
+
+.header-title {
     font-size: 38px;
-    line-height: 1.08;
-    font-weight: 750;
-    color: #282c3a;
-    margin: 0 0 7px 0;
+    line-height: 1.18;
+    font-weight: 800;
+    color: #2b2f3a;
+    margin: 0;
+    padding: 0.1rem 0 0.2rem 0;
+    overflow: visible !important;
+    white-space: normal !important;
 }
 
-.fa-subtitle {
+.header-subtitle {
     font-size: 14px;
-    color: #7a7f8a;
-    margin-bottom: 18px;
+    color: #757b86;
+    margin-top: 6px;
+    line-height: 1.35;
 }
 
-/* Native metric cards */
-
+/* Metric cards */
 div[data-testid="stMetric"] {
+    background: white !important;
     border: 1px solid #e2e5e9 !important;
-    border-radius: 12px !important;
-    padding: 13px !important;
-    background: white;
+    border-radius: 14px !important;
+    padding: 12px !important;
 }
 
 /* Tabs */
-
 div[data-baseweb="tab-list"] {
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
@@ -149,36 +174,52 @@ button[data-baseweb="tab"] {
 }
 
 /* Buttons */
-
 .stButton > button {
     border-radius: 10px;
 }
 
-/* MOBILE */
-
+/* Mobile */
 @media (max-width: 768px) {
 
     .block-container {
-        padding-top: 0.4rem !important;
+        padding-top: 0.8rem !important;
         padding-left: 0.65rem !important;
         padding-right: 0.65rem !important;
+        padding-bottom: 1.5rem !important;
     }
 
-    .fa-title {
-        font-size: 25px !important;
-        line-height: 1.1 !important;
-        margin-bottom: 5px !important;
+    .header-wrap {
+        padding-top: 0.25rem !important;
+        margin-bottom: 0.75rem !important;
     }
 
-    .fa-subtitle {
+    .header-row {
+        align-items: center;
+        gap: 7px;
+    }
+
+    .header-icon {
+        font-size: 27px !important;
+        line-height: 1.2 !important;
+    }
+
+    .header-title {
+        font-size: 24px !important;
+        line-height: 1.22 !important;
+        font-weight: 800 !important;
+        padding-top: 0.15rem !important;
+        padding-bottom: 0.15rem !important;
+    }
+
+    .header-subtitle {
         font-size: 11px !important;
-        line-height: 1.25 !important;
-        margin-bottom: 11px !important;
+        line-height: 1.35 !important;
+        margin-top: 4px !important;
     }
 
     div[data-testid="stMetric"] {
+        min-height: 82px !important;
         padding: 8px !important;
-        min-height: 80px !important;
     }
 
     div[data-testid="stMetricLabel"] p {
@@ -197,15 +238,29 @@ button[data-baseweb="tab"] {
 
     .stButton > button {
         width: 100%;
-        min-height: 43px;
+        min-height: 42px;
     }
 
     h2 {
-        font-size: 22px !important;
+        font-size: 21px !important;
     }
 
     h3 {
         font-size: 18px !important;
+    }
+}
+
+@media (max-width: 390px) {
+    .header-title {
+        font-size: 22px !important;
+    }
+
+    .header-icon {
+        font-size: 25px !important;
+    }
+
+    .header-subtitle {
+        font-size: 10px !important;
     }
 }
 
@@ -224,7 +279,6 @@ def clean_text(value):
 
 
 def normalise_name(value):
-
     value = clean_text(value).lower()
 
     replacements = {
@@ -241,19 +295,12 @@ def normalise_name(value):
     for old, new in replacements.items():
         value = value.replace(old, new)
 
-    value = re.sub(
-        r"[^a-z0-9]+",
-        " ",
-        value
-    )
-
+    value = re.sub(r"[^a-z0-9]+", " ", value)
     return " ".join(value.split())
 
 
 def is_excluded_from_shortlist(company):
-
     key = normalise_name(company)
-
     return any(
         normalise_name(word) in key
         for word in EXCLUDED_SHORTLIST_KEYWORDS
@@ -261,7 +308,6 @@ def is_excluded_from_shortlist(company):
 
 
 def pavilion_sort_key(value):
-
     value = clean_text(value).upper()
 
     if not value:
@@ -276,7 +322,6 @@ def pavilion_sort_key(value):
 
 
 def ensure_target_columns(df):
-
     defaults = {
         "company": "",
         "rank": "",
@@ -295,23 +340,16 @@ def ensure_target_columns(df):
     }
 
     for column, default in defaults.items():
-
         if column not in df.columns:
             df[column] = default
 
     for column in defaults:
-
-        df[column] = (
-            df[column]
-            .fillna("")
-            .astype(str)
-        )
+        df[column] = df[column].fillna("").astype(str)
 
     return df[list(defaults.keys())]
 
 
 def reorder_shortlist(df, company, new_position):
-
     work = df.copy()
 
     work["_rank_num"] = (
@@ -324,9 +362,7 @@ def reorder_shortlist(df, company, new_position):
 
     work = (
         work
-        .sort_values(
-            ["_rank_num", "company"]
-        )
+        .sort_values(["_rank_num", "company"])
         .reset_index(drop=True)
     )
 
@@ -370,12 +406,11 @@ def reorder_shortlist(df, company, new_position):
 
 
 # ============================================================
-# IFEMA
+# LOAD IFEMA
 # ============================================================
 
 @st.cache_data(ttl=3600)
 def load_ifema():
-
     payload = {
         "page": 0,
         "pageSize": 10000,
@@ -392,7 +427,6 @@ def load_ifema():
     )
 
     response.raise_for_status()
-
     result = response.json()
 
     total_elements = result.get(
@@ -403,7 +437,6 @@ def load_ifema():
     rows = []
 
     for exhibitor in result.get("data", []):
-
         company = clean_text(
             exhibitor.get("name")
         )
@@ -422,55 +455,35 @@ def load_ifema():
         )
 
         if stands:
-
             for stand in stands:
-
                 rows.append({
                     "company": company,
-                    "company_key":
-                        normalise_name(company),
-
+                    "company_key": normalise_name(company),
                     "website": website,
-
-                    "pavilion":
-                        clean_text(
-                            stand.get("location")
-                        ),
-
-                    "stand":
-                        clean_text(
-                            stand.get("name")
-                        ),
-
-                    "ifema_status":
-                        "Confirmed by IFEMA",
-
-                    "ifema_id":
-                        exhibitor_id,
+                    "pavilion": clean_text(
+                        stand.get("location")
+                    ),
+                    "stand": clean_text(
+                        stand.get("name")
+                    ),
+                    "ifema_status": "Confirmed by IFEMA",
+                    "ifema_id": exhibitor_id,
                 })
 
         else:
-
             rows.append({
                 "company": company,
-                "company_key":
-                    normalise_name(company),
-
+                "company_key": normalise_name(company),
                 "website": website,
                 "pavilion": "",
                 "stand": "",
-
-                "ifema_status":
-                    "Stand not yet published",
-
-                "ifema_id":
-                    exhibitor_id,
+                "ifema_status": "Stand not yet published",
+                "ifema_id": exhibitor_id,
             })
 
     df = pd.DataFrame(rows)
 
     if df.empty:
-
         df = pd.DataFrame(
             columns=[
                 "company",
@@ -484,7 +497,6 @@ def load_ifema():
         )
 
     for column in df.columns:
-
         df[column] = (
             df[column]
             .fillna("")
@@ -495,34 +507,28 @@ def load_ifema():
 
 
 # ============================================================
-# SHORTLIST
+# LOAD SHORTLIST
 # ============================================================
 
 @st.cache_data(ttl=30)
 def load_targets():
-
     try:
-
         df = pd.read_csv(
             CSV_FILE,
             dtype=str
         ).fillna("")
 
     except Exception:
-
         df = pd.DataFrame()
 
     df = ensure_target_columns(df)
 
-    # Agrimarba + HSBC stay out of shortlist.
     df = df[
         ~df["company"]
-        .apply(
-            is_excluded_from_shortlist
-        )
+        .apply(is_excluded_from_shortlist)
     ].copy()
 
-    default_rank = {
+    initial_ranking = {
         "hortifrut": 1,
         "citri and co": 2,
         "climate asset management": 3,
@@ -535,7 +541,6 @@ def load_targets():
     }
 
     def assign_rank(row):
-
         existing = clean_text(
             row["rank"]
         )
@@ -543,13 +548,12 @@ def load_targets():
         if existing:
             return existing
 
-        key = normalise_name(
+        company_key = normalise_name(
             row["company"]
         )
 
-        for name, rank in default_rank.items():
-
-            if normalise_name(name) in key:
+        for name, rank in initial_ranking.items():
+            if normalise_name(name) in company_key:
                 return str(rank)
 
         return "99"
@@ -563,25 +567,21 @@ def load_targets():
 
 
 # ============================================================
-# SAVE GITHUB
+# SAVE TO GITHUB
 # ============================================================
 
 def save_to_github(dataframe):
-
     if not GITHUB_TOKEN:
-
         return (
             False,
-            "GITHUB_TOKEN missing in Streamlit Secrets."
+            "GITHUB_TOKEN is missing from Streamlit Secrets."
         )
 
     dataframe = dataframe.copy()
 
     dataframe = dataframe[
         ~dataframe["company"]
-        .apply(
-            is_excluded_from_shortlist
-        )
+        .apply(is_excluded_from_shortlist)
     ].copy()
 
     dataframe = dataframe.drop(
@@ -607,7 +607,6 @@ def save_to_github(dataframe):
     headers = {
         "Authorization":
             f"Bearer {GITHUB_TOKEN}",
-
         "Accept":
             "application/vnd.github+json",
     }
@@ -619,11 +618,10 @@ def save_to_github(dataframe):
     )
 
     if current.status_code != 200:
-
         return (
             False,
-            f"GitHub read error "
-            f"{current.status_code}"
+            f"GitHub read error {current.status_code}: "
+            f"{current.text}"
         )
 
     sha = current.json()["sha"]
@@ -638,10 +636,8 @@ def save_to_github(dataframe):
     payload = {
         "message":
             "Update Fruit Attraction dashboard",
-
         "content":
             encoded,
-
         "sha":
             sha,
     }
@@ -654,27 +650,21 @@ def save_to_github(dataframe):
     )
 
     if response.status_code in [200, 201]:
-
         load_targets.clear()
-
         return True, "Saved"
 
     return (
         False,
-        f"GitHub save error "
-        f"{response.status_code}"
+        f"GitHub save error {response.status_code}: "
+        f"{response.text}"
     )
 
 
 # ============================================================
-# RELEVANCE
+# RELEVANCE ENGINE
 # ============================================================
 
-def calculate_relevance(
-    company,
-    website=""
-):
-
+def calculate_relevance(company, website=""):
     text = (
         clean_text(company)
         + " "
@@ -726,17 +716,14 @@ def calculate_relevance(
     ]
 
     for keyword in strategic:
-
         if keyword in text:
             score += 50
 
     for keyword in high_crop:
-
         if keyword in text:
             score += 15
 
     for keyword in agriculture:
-
         if keyword in text:
             score += 5
 
@@ -748,19 +735,13 @@ def calculate_relevance(
 # ============================================================
 
 try:
-
-    ifema, ifema_total = (
-        load_ifema()
-    )
+    ifema, ifema_total = load_ifema()
 
 except Exception as error:
-
     st.error(
-        "Could not connect to IFEMA."
+        "Could not connect to the IFEMA catalogue."
     )
-
     st.code(str(error))
-
     st.stop()
 
 
@@ -773,7 +754,7 @@ targets["company_key"] = (
 
 
 # ============================================================
-# MERGE DATA
+# MERGE IFEMA + SHORTLIST
 # ============================================================
 
 target_lookup = (
@@ -785,9 +766,7 @@ target_lookup = (
 
 ifema["selected"] = (
     ifema["company_key"]
-    .isin(
-        target_lookup.keys()
-    )
+    .isin(target_lookup.keys())
 )
 
 ifema["priority"] = (
@@ -796,10 +775,7 @@ ifema["priority"] = (
         lambda key:
         target_lookup
         .get(key, {})
-        .get(
-            "priority",
-            ""
-        )
+        .get("priority", "")
     )
 )
 
@@ -809,10 +785,7 @@ ifema["rank"] = (
         lambda key:
         target_lookup
         .get(key, {})
-        .get(
-            "rank",
-            ""
-        )
+        .get("rank", "")
     )
 )
 
@@ -853,17 +826,19 @@ ifema = (
 
 
 # ============================================================
-# HEADER
+# HEADER — FIXED / MOBILE SAFE
 # ============================================================
 
 st.markdown(
     """
-<div class="fa-title">
-🌱 Fruit Attraction 2026
-</div>
-
-<div class="fa-subtitle">
-Iberia Team · IFEMA Madrid · 6–8 October 2026
+<div class="header-wrap">
+    <div class="header-row">
+        <div class="header-icon">🌱</div>
+        <div class="header-title">Fruit Attraction 2026</div>
+    </div>
+    <div class="header-subtitle">
+        Iberia Team · IFEMA Madrid · 6–8 October 2026
+    </div>
 </div>
 """,
     unsafe_allow_html=True,
@@ -883,50 +858,45 @@ meetings_count = len(
 
 high_priority_count = len(
     targets[
-        targets["priority"]
-        == "High"
+        targets["priority"] == "High"
     ]
 )
 
-# Keep 2×2 always.
-r1c1, r1c2 = st.columns(2)
+# Native boxes: stable on desktop + mobile
+row1_col1, row1_col2 = st.columns(2)
 
-with r1c1:
-
+with row1_col1:
     st.metric(
-        "IFEMA exhibitors",
-        f"{ifema_total:,}",
-        border=True
+        label="IFEMA exhibitors",
+        value=f"{ifema_total:,}",
+        border=True,
     )
 
-with r1c2:
-
+with row1_col2:
     st.metric(
-        "Iberia shortlist",
-        len(targets),
-        border=True
+        label="Iberia shortlist",
+        value=len(targets),
+        border=True,
     )
 
-r2c1, r2c2 = st.columns(2)
+row2_col1, row2_col2 = st.columns(2)
 
-with r2c1:
-
+with row2_col1:
     st.metric(
-        "High priority",
-        high_priority_count,
-        border=True
+        label="High priority",
+        value=high_priority_count,
+        border=True,
     )
 
-with r2c2:
-
+with row2_col2:
     st.metric(
-        "Meetings",
-        meetings_count,
-        border=True
+        label="Meetings",
+        value=meetings_count,
+        border=True,
     )
 
 st.caption(
-    "IFEMA catalogue checked hourly while the app is active."
+    "IFEMA catalogue automatically re-checked every hour while the app is active."
 )
 
 st.divider()
@@ -962,7 +932,6 @@ st.divider()
 # ============================================================
 
 with tab1:
-
     st.subheader(
         "Iberia priority companies"
     )
@@ -982,14 +951,12 @@ with tab1:
     )
 
     for _, target in view.iterrows():
-
         matches = ifema[
             ifema["company_key"]
             == target["company_key"]
         ]
 
         if not matches.empty:
-
             match = matches.iloc[0]
 
             pavilion = (
@@ -1002,57 +969,57 @@ with tab1:
                 or "TBC"
             )
 
-            website = (
-                match["website"]
-            )
-
             confirmed = bool(
                 match["stand"]
             )
 
-        else:
+            website = (
+                match["website"]
+            )
 
+        else:
             pavilion = "TBC"
             stand = "TBC"
-            website = ""
             confirmed = False
+            website = ""
 
         with st.container(
             border=True
         ):
-
             st.markdown(
                 f"### #{target['rank']} · "
                 f"{target['company']}"
             )
 
+            sector = (
+                target["sector"]
+                or "Sector TBC"
+            )
+
             st.caption(
-                f"{target['sector'] or 'Sector TBC'}"
-                f" · Priority "
-                f"{target['priority']}"
+                f"{sector} · "
+                f"Priority {target['priority']}"
             )
 
             st.markdown(
-                f"📍 **{pavilion} · "
+                f"📍 **Pavilion "
+                f"{pavilion} · "
                 f"Stand {stand}**"
             )
 
             if confirmed:
-
                 st.success(
                     "Confirmed by IFEMA",
                     icon="✅"
                 )
 
             else:
-
                 st.warning(
-                    "Location pending IFEMA",
+                    "Location not yet published by IFEMA",
                     icon="⏳"
                 )
 
             if target["why_interesting"]:
-
                 st.write(
                     target[
                         "why_interesting"
@@ -1060,10 +1027,17 @@ with tab1:
                 )
 
             if website:
-
                 st.markdown(
                     f"[Company website]"
                     f"({website})"
+                )
+
+            if (
+                target["visited"]
+                == "Yes"
+            ):
+                st.caption(
+                    "✅ Visited"
                 )
 
 
@@ -1072,18 +1046,23 @@ with tab1:
 # ============================================================
 
 with tab2:
-
     st.subheader(
         f"All IFEMA exhibitors "
         f"({ifema_total:,})"
+    )
+
+    st.caption(
+        "Search and add companies "
+        "directly to the Iberia shortlist."
     )
 
     search = st.text_input(
         "Search exhibitor",
         placeholder=(
             "Hortifrut, Surexport, "
-            "avocado..."
-        )
+            "avocado, berries..."
+        ),
+        key="all_search",
     )
 
     pavilion_options = sorted(
@@ -1094,20 +1073,32 @@ with tab2:
             ]
             if clean_text(x)
         },
-        key=pavilion_sort_key
+        key=pavilion_sort_key,
     )
 
+    f1, f2 = st.columns(2)
+
     pavilion_filter = (
-        st.multiselect(
+        f1.multiselect(
             "Pavilion",
             pavilion_options
+        )
+    )
+
+    selection_filter = (
+        f2.selectbox(
+            "Shortlist",
+            [
+                "All",
+                "Selected",
+                "Not selected"
+            ]
         )
     )
 
     all_view = ifema.copy()
 
     if search:
-
         all_view = all_view[
             all_view["company"]
             .str.contains(
@@ -1119,12 +1110,19 @@ with tab2:
         ]
 
     if pavilion_filter:
-
         all_view = all_view[
             all_view["pavilion"]
-            .isin(
-                pavilion_filter
-            )
+            .isin(pavilion_filter)
+        ]
+
+    if selection_filter == "Selected":
+        all_view = all_view[
+            all_view["selected"]
+        ]
+
+    elif selection_filter == "Not selected":
+        all_view = all_view[
+            ~all_view["selected"]
         ]
 
     all_view = (
@@ -1146,7 +1144,7 @@ with tab2:
         )
     )
 
-    priority_to_add = (
+    default_priority = (
         st.selectbox(
             "Priority when adding",
             [
@@ -1154,13 +1152,14 @@ with tab2:
                 "Medium",
                 "Low"
             ],
-            index=1
+            index=1,
+            key="mobile_add_priority",
         )
     )
 
     st.caption(
         f"{len(all_view)} result(s). "
-        f"Showing first 50."
+        f"Showing up to 50."
     )
 
     for _, row in (
@@ -1168,21 +1167,21 @@ with tab2:
         .head(50)
         .iterrows()
     ):
-
         with st.container(
             border=True
         ):
-
             st.markdown(
                 f"### {row['company']}"
             )
 
-            st.write(
-                f"📍 **"
+            location = (
                 f"{row['pavilion'] or 'TBC'} "
-                f"· Stand "
+                f"· "
                 f"{row['stand'] or 'TBC'}"
-                f"**"
+            )
+
+            st.write(
+                f"📍 **{location}**"
             )
 
             st.caption(
@@ -1190,33 +1189,44 @@ with tab2:
             )
 
             if row["website"]:
-
                 st.markdown(
                     f"[Website]"
                     f"({row['website']})"
                 )
 
+            st.write(
+                f"Iberia relevance: "
+                f"**{int(row['nuveen_score'])}**"
+            )
+
             if row["selected"]:
-
                 st.success(
-                    "Already in shortlist"
+                    f"Already in shortlist "
+                    f"· Priority "
+                    f"{row['priority']}"
                 )
 
-            elif not (
-                is_excluded_from_shortlist(
-                    row["company"]
-                )
-            ):
+            else:
+                if (
+                    is_excluded_from_shortlist(
+                        row["company"]
+                    )
+                ):
+                    st.caption(
+                        "Not included in "
+                        "the working shortlist."
+                    )
 
-                if st.button(
+                elif st.button(
                     "⭐ Add to shortlist",
                     key=(
-                        "add_"
-                        + row["company_key"]
+                        "mobile_add_"
+                        + row[
+                            "company_key"
+                        ]
                     ),
-                    use_container_width=True
+                    use_container_width=True,
                 ):
-
                     ranks = (
                         pd.to_numeric(
                             targets["rank"],
@@ -1224,50 +1234,67 @@ with tab2:
                         )
                     )
 
-                    next_rank = (
-                        int(
-                            ranks.max()
-                        ) + 1
-                        if ranks.notna().any()
-                        else 1
-                    )
+                    if (
+                        ranks
+                        .notna()
+                        .any()
+                    ):
+                        next_rank = (
+                            int(
+                                ranks.max()
+                            )
+                            + 1
+                        )
+
+                    else:
+                        next_rank = 1
 
                     new_row = {
                         "company":
                             row["company"],
-
                         "rank":
                             str(next_rank),
-
                         "priority":
-                            priority_to_add,
-
-                        "type": "",
-                        "sector": "",
-                        "why_interesting": "",
-                        "confirmed_hall": "",
-                        "confirmed_stand": "",
-                        "event_info": "",
-                        "contact": "",
-                        "meeting_date": "",
-                        "meeting_time": "",
-                        "visited": "No",
-                        "notes": "",
+                            default_priority,
+                        "type":
+                            "",
+                        "sector":
+                            "",
+                        "why_interesting":
+                            "",
+                        "confirmed_hall":
+                            "",
+                        "confirmed_stand":
+                            "",
+                        "event_info":
+                            "",
+                        "contact":
+                            "",
+                        "meeting_date":
+                            "",
+                        "meeting_time":
+                            "",
+                        "visited":
+                            "No",
+                        "notes":
+                            "",
                     }
 
-                    updated = pd.concat(
-                        [
-                            targets.drop(
-                                columns=[
-                                    "company_key"
-                                ],
-                                errors="ignore"
-                            ),
-                            pd.DataFrame(
-                                [new_row]
-                            )
-                        ],
-                        ignore_index=True
+                    updated = (
+                        pd.concat(
+                            [
+                                targets.drop(
+                                    columns=[
+                                        "company_key"
+                                    ],
+                                    errors="ignore"
+                                ),
+                                pd.DataFrame(
+                                    [new_row]
+                                )
+                            ],
+                            ignore_index=True
+                        )
                     )
 
                     success, message = (
@@ -1277,21 +1304,20 @@ with tab2:
                     )
 
                     if success:
-
                         st.cache_data.clear()
                         st.rerun()
 
                     else:
-
-                        st.error(message)
+                        st.error(
+                            message
+                        )
 
 
 # ============================================================
-# TAB 3 — PAVILION
+# TAB 3 — BY PAVILION
 # ============================================================
 
 with tab3:
-
     st.subheader(
         "Shortlist by pavilion"
     )
@@ -1303,47 +1329,80 @@ with tab3:
         .copy()
     )
 
-    pavilion_values = sorted(
-        {
+    if selected_ifema.empty:
+        st.info(
+            "No shortlist companies matched to IFEMA."
+        )
+
+    else:
+        pavilion_values = {
             clean_text(x)
             for x in selected_ifema[
                 "pavilion"
             ]
-        },
-        key=pavilion_sort_key
-    )
+        }
 
-    for pavilion in pavilion_values:
-
-        st.markdown(
-            f"## 📍 {pavilion or 'TBC'}"
+        pavilion_options = sorted(
+            pavilion_values,
+            key=pavilion_sort_key
         )
 
-        pv = selected_ifema[
-            selected_ifema[
-                "pavilion"
-            ] == pavilion
-        ].copy()
+        for pavilion in pavilion_options:
+            pavilion_label = (
+                pavilion
+                or "TBC"
+            )
 
-        pv["_rank"] = (
-            pd.to_numeric(
-                pv["rank"],
+            st.markdown(
+                f"## 📍 Pavilion "
+                f"{pavilion_label}"
+            )
+
+            pavilion_df = (
+                selected_ifema[
+                    selected_ifema[
+                        "pavilion"
+                    ]
+                    == pavilion
+                ]
+                .copy()
+            )
+
+            pavilion_df[
+                "_rank"
+            ] = pd.to_numeric(
+                pavilion_df[
+                    "rank"
+                ],
                 errors="coerce"
+            ).fillna(999)
+
+            pavilion_df = (
+                pavilion_df
+                .sort_values(
+                    [
+                        "_rank",
+                        "company"
+                    ]
+                )
             )
-            .fillna(999)
-        )
 
-        pv = pv.sort_values(
-            ["_rank", "company"]
-        )
+            for _, row in (
+                pavilion_df
+                .iterrows()
+            ):
+                stand = (
+                    row["stand"]
+                    or "TBC"
+                )
 
-        for _, row in pv.iterrows():
+                st.markdown(
+                    f"**#{row['rank']} · "
+                    f"{row['company']}** "
+                    f"— Stand {stand}"
+                )
 
-            st.write(
-                f"**#{row['rank']} · "
-                f"{row['company']}** "
-                f"— {row['stand'] or 'TBC'}"
-            )
+            st.divider()
 
 
 # ============================================================
@@ -1351,7 +1410,6 @@ with tab3:
 # ============================================================
 
 with tab4:
-
     st.subheader(
         "Meetings"
     )
@@ -1360,8 +1418,7 @@ with tab4:
         "➕ Add / update meeting",
         expanded=True
     ):
-
-        companies = (
+        shortlist_companies = (
             targets
             .sort_values(
                 "company"
@@ -1371,84 +1428,91 @@ with tab4:
             .tolist()
         )
 
-        if companies:
+        if not shortlist_companies:
+            st.info(
+                "Add companies to "
+                "the shortlist first."
+            )
 
+        else:
             with st.form(
-                "meeting_form"
+                "add_meeting_form"
             ):
-
-                company = (
+                meeting_company = (
                     st.selectbox(
                         "Company",
-                        companies
+                        shortlist_companies
                     )
                 )
 
-                date = (
+                meeting_date = (
                     st.date_input(
                         "Date"
                     )
                 )
 
-                time = (
+                meeting_time = (
                     st.time_input(
                         "Time"
                     )
                 )
 
-                contact = (
+                meeting_contact = (
                     st.text_input(
                         "Contact"
                     )
                 )
 
-                notes = (
+                meeting_notes = (
                     st.text_area(
-                        "Notes"
+                        "Notes",
+                        placeholder=(
+                            "Topics to discuss, "
+                            "meeting point..."
+                        )
                     )
                 )
 
-                submitted = (
+                submit_meeting = (
                     st.form_submit_button(
                         "💾 Save meeting",
                         type="primary"
                     )
                 )
 
-            if submitted:
-
+            if submit_meeting:
                 updated = (
                     targets.copy()
                 )
 
                 mask = (
                     updated["company"]
-                    == company
+                    == meeting_company
                 )
 
                 updated.loc[
                     mask,
                     "meeting_date"
-                ] = date.strftime(
+                ] = meeting_date.strftime(
                     "%d %b %Y"
                 )
 
                 updated.loc[
                     mask,
                     "meeting_time"
-                ] = time.strftime(
+                ] = meeting_time.strftime(
                     "%H:%M"
                 )
 
                 updated.loc[
                     mask,
                     "contact"
-                ] = contact
+                ] = meeting_contact
 
                 updated.loc[
                     mask,
                     "notes"
-                ] = notes
+                ] = meeting_notes
 
                 success, message = (
                     save_to_github(
@@ -1457,60 +1521,122 @@ with tab4:
                 )
 
                 if success:
-
                     st.cache_data.clear()
                     st.rerun()
 
                 else:
+                    st.error(
+                        message
+                    )
 
-                    st.error(message)
+    st.divider()
 
-    meetings = targets[
-        (
-            targets["meeting_date"]
-            != ""
-        )
-        |
-        (
-            targets["meeting_time"]
-            != ""
-        )
-    ]
+    meetings = (
+        targets[
+            (
+                targets[
+                    "meeting_date"
+                ]
+                != ""
+            )
+            |
+            (
+                targets[
+                    "meeting_time"
+                ]
+                != ""
+            )
+        ]
+        .copy()
+    )
 
     if meetings.empty:
-
         st.info(
-            "No meetings scheduled."
+            "No meetings scheduled yet."
         )
 
-    for _, row in meetings.iterrows():
+    else:
+        meetings = (
+            meetings
+            .sort_values(
+                [
+                    "meeting_date",
+                    "meeting_time"
+                ]
+            )
+        )
 
-        with st.container(
-            border=True
+        for _, row in (
+            meetings.iterrows()
         ):
-
-            st.markdown(
-                f"### 🤝 {row['company']}"
-            )
-
-            st.write(
-                f"📅 **"
-                f"{row['meeting_date']} · "
-                f"{row['meeting_time']}**"
-            )
-
-            if row["contact"]:
-
-                st.write(
-                    f"Contact: "
-                    f"{row['contact']}"
+            with st.container(
+                border=True
+            ):
+                st.markdown(
+                    f"### 🤝 "
+                    f"{row['company']}"
                 )
 
-            if row["notes"]:
-
-                st.write(
-                    row["notes"]
+                st.markdown(
+                    f"**📅 "
+                    f"{row['meeting_date']} "
+                    f"· 🕐 "
+                    f"{row['meeting_time']}**"
                 )
+
+                if row["contact"]:
+                    st.write(
+                        f"**Contact:** "
+                        f"{row['contact']}"
+                    )
+
+                if row["notes"]:
+                    st.write(
+                        row["notes"]
+                    )
+
+                if st.button(
+                    "🗑 Remove meeting",
+                    key=(
+                        "remove_meeting_"
+                        + row[
+                            "company_key"
+                        ]
+                    ),
+                    use_container_width=True,
+                ):
+                    updated = (
+                        targets.copy()
+                    )
+
+                    mask = (
+                        updated["company"]
+                        == row["company"]
+                    )
+
+                    updated.loc[
+                        mask,
+                        [
+                            "meeting_date",
+                            "meeting_time",
+                            "contact"
+                        ]
+                    ] = ""
+
+                    success, message = (
+                        save_to_github(
+                            updated
+                        )
+                    )
+
+                    if success:
+                        st.cache_data.clear()
+                        st.rerun()
+
+                    else:
+                        st.error(
+                            message
+                        )
 
 
 # ============================================================
@@ -1518,70 +1644,106 @@ with tab4:
 # ============================================================
 
 with tab5:
-
     st.subheader(
         "Important events & talks"
     )
 
     st.info(
-        "TBC means IFEMA has not "
-        "published the detail yet."
+        "Confirmed information is "
+        "shown as such. Items not yet "
+        "published by IFEMA remain TBC."
     )
 
-    events = pd.DataFrame(
-        IMPORTANT_EVENTS
+    event_df = (
+        pd.DataFrame(
+            IMPORTANT_EVENTS
+        )
+    )
+
+    event_df["_sort"] = (
+        event_df[
+            "relevance"
+        ]
+        .map(
+            {
+                "High": 1,
+                "Medium": 2,
+                "Low": 3
+            }
+        )
+        .fillna(99)
+    )
+
+    event_df = (
+        event_df
+        .sort_values(
+            [
+                "_sort",
+                "date",
+                "time"
+            ]
+        )
     )
 
     for _, event in (
-        events.iterrows()
+        event_df.iterrows()
     ):
-
         with st.container(
             border=True
         ):
-
             st.markdown(
                 f"### 🎤 "
                 f"{event['title']}"
             )
 
-            st.write(
+            st.markdown(
                 f"📅 **"
                 f"{event['date']} "
                 f"· {event['time']}**"
             )
 
             st.write(
-                f"📍 {event['location']}"
+                f"📍 "
+                f"{event['location']}"
             )
 
             st.write(
-                event["description"]
+                event[
+                    "description"
+                ]
             )
 
-            st.caption(
-                f"Relevance: "
+            st.write(
+                f"**Relevance for Iberia Team:** "
                 f"{event['relevance']}"
             )
 
+            if (
+                event["status"]
+                == "Confirmed"
+            ):
+                st.success(
+                    "Confirmed"
+                )
+
+            else:
+                st.warning(
+                    event["status"]
+                )
+
     st.markdown(
-        f"[Official IFEMA programme]"
+        f"[Open official IFEMA programme]"
         f"({IFEMA_PROGRAM_URL})"
     )
 
 
 # ============================================================
-# ASSISTANT HELPERS
+# ASSISTANT
 # ============================================================
 
-def build_assistant_context(
-    question
-):
-
-    question_norm = (
-        normalise_name(
-            question
-        )
+def build_assistant_context(question):
+    question_norm = normalise_name(
+        question
     )
 
     words = [
@@ -1590,12 +1752,9 @@ def build_assistant_context(
         if len(w) >= 3
     ]
 
-    # Shortlist context
     shortlist_lines = []
 
-    ranked_targets = (
-        targets.copy()
-    )
+    ranked_targets = targets.copy()
 
     ranked_targets["_rank"] = (
         pd.to_numeric(
@@ -1613,7 +1772,6 @@ def build_assistant_context(
     for _, row in (
         ranked_targets.iterrows()
     ):
-
         matched = ifema[
             ifema["company_key"]
             == row["company_key"]
@@ -1623,7 +1781,6 @@ def build_assistant_context(
         stand = "TBC"
 
         if not matched.empty:
-
             pavilion = (
                 matched.iloc[0][
                     "pavilion"
@@ -1642,27 +1799,24 @@ def build_assistant_context(
             f"- #{row['rank']} "
             f"{row['company']} | "
             f"Priority {row['priority']} | "
-            f"{pavilion} | "
+            f"Pavilion {pavilion} | "
             f"Stand {stand} | "
             f"Sector {row['sector']} | "
             f"Why relevant: "
             f"{row['why_interesting']}"
         )
 
-    # Relevant exhibitor matches
     exhibitor_matches = (
         ifema.copy()
     )
 
     if words:
-
         mask = pd.Series(
             False,
             index=exhibitor_matches.index
         )
 
         for word in words:
-
             mask = (
                 mask
                 |
@@ -1684,14 +1838,13 @@ def build_assistant_context(
             .drop_duplicates(
                 "company_key"
             )
-            .head(25)
+            .head(30)
         )
 
     else:
-
         matched_exhibitors = (
             exhibitor_matches
-            .head(15)
+            .head(20)
         )
 
     exhibitor_lines = []
@@ -1699,15 +1852,13 @@ def build_assistant_context(
     for _, row in (
         matched_exhibitors.iterrows()
     ):
-
         exhibitor_lines.append(
             f"- {row['company']} | "
-            f"{row['pavilion'] or 'TBC'} | "
+            f"Pavilion {row['pavilion'] or 'TBC'} | "
             f"Stand {row['stand'] or 'TBC'} | "
             f"Website {row['website'] or 'N/A'}"
         )
 
-    # Meetings
     meeting_lines = []
 
     meetings = targets[
@@ -1723,7 +1874,6 @@ def build_assistant_context(
     ]
 
     for _, row in meetings.iterrows():
-
         meeting_lines.append(
             f"- {row['company']} | "
             f"{row['meeting_date']} "
@@ -1732,11 +1882,9 @@ def build_assistant_context(
             f"Notes {row['notes']}"
         )
 
-    # Events
     event_lines = []
 
     for event in IMPORTANT_EVENTS:
-
         event_lines.append(
             f"- {event['title']} | "
             f"{event['date']} | "
@@ -1746,31 +1894,35 @@ def build_assistant_context(
         )
 
     return f"""
-FRUIT ATTRACTION 2026 INTERNAL DASHBOARD DATA
+FRUIT ATTRACTION 2026 DASHBOARD DATA
 
-Shortlist:
+SHORTLIST:
 {chr(10).join(shortlist_lines)}
 
-Relevant IFEMA exhibitors for this question:
+RELEVANT IFEMA EXHIBITORS:
 {chr(10).join(exhibitor_lines) if exhibitor_lines else "No direct catalogue match."}
 
-Meetings:
+MEETINGS:
 {chr(10).join(meeting_lines) if meeting_lines else "No meetings scheduled."}
 
-Events:
+EVENTS:
 {chr(10).join(event_lines)}
 
-Important:
-- IFEMA catalogue data is the authoritative source for pavilion and stand in this dashboard.
-- If a stand says TBC, say IFEMA has not published it yet.
-- Do not invent meetings, stands or event times.
+IMPORTANT:
+- For pavilion and stand, the IFEMA catalogue above is the source of truth.
+- If a location says TBC, say IFEMA has not published it yet.
+- Do not invent meetings, people, stands or event times.
 """
 
 
 def ask_assistant(question):
+    if OpenAI is None:
+        return (
+            "The OpenAI Python package is not installed. "
+            "Add `openai` to requirements.txt."
+        )
 
     if not OPENAI_API_KEY:
-
         return (
             "The assistant is not configured yet. "
             "Add OPENAI_API_KEY to Streamlit Secrets."
@@ -1784,54 +1936,37 @@ def ask_assistant(question):
         question
     )
 
-    prompt = f"""
-You are the Fruit Attraction 2026 assistant for an Iberia agricultural
-investment team.
+    instructions = """
+You are the Fruit Attraction 2026 assistant for an Iberia agricultural investment team.
 
-Your job is to help prepare for and navigate Fruit Attraction.
-
-Use the internal dashboard data below first. You may use web search for
-current external information about companies, people, news, strategies,
-ownership, crops, operating footprint, partnerships or other useful context.
+Use the internal dashboard data first.
+Use web search when current external information would improve the answer.
 
 Rules:
-1. For pavilion and stand, prefer the IFEMA dashboard data provided below.
-2. Clearly say when IFEMA has not yet published something.
-3. Never invent a stand, meeting, event time or person.
-4. For web-derived claims, cite the web sources available to you.
-5. Keep answers practical and concise.
-6. If the user asks what to visit nearby, group suggestions by pavilion.
-7. If the user asks about a company, explain why it may be relevant to an
-   institutional agricultural / natural-capital investor.
-8. Distinguish:
-   - IFEMA data
-   - Team data
-   - External web research
-9. Respond in the same language as the user's question.
-
-INTERNAL DATA:
-{context}
-
-USER QUESTION:
-{question}
+- For pavilion and stand, prefer the IFEMA dashboard data.
+- Clearly state when IFEMA has not published something.
+- Never invent meetings, stands, contacts or event times.
+- Keep answers practical and concise.
+- If the user asks what to visit nearby, group by pavilion.
+- For company research, explain why the company could matter to an institutional agricultural investor.
+- Distinguish IFEMA data, team data and external web research where useful.
+- Respond in the same language as the user's question.
 """
 
     response = client.responses.create(
-        model="gpt-5.6-luna",
-        reasoning={
-            "effort": "low"
-        },
+        model="gpt-5",
+        instructions=instructions,
         tools=[
             {
-                "type":
-                    "web_search",
-
-                "search_context_size":
-                    "low",
+                "type": "web_search",
+                "search_context_size": "low",
             }
         ],
-        tool_choice="auto",
-        input=prompt,
+        input=(
+            f"{context}\n\n"
+            f"USER QUESTION:\n"
+            f"{question}"
+        ),
     )
 
     return response.output_text
@@ -1842,7 +1977,6 @@ USER QUESTION:
 # ============================================================
 
 with tab6:
-
     st.subheader(
         "🤖 Fruit Attraction Assistant"
     )
@@ -1854,66 +1988,56 @@ with tab6:
     )
 
     if not OPENAI_API_KEY:
-
         st.warning(
             "Assistant not activated yet. "
-            "Add OPENAI_API_KEY in "
-            "Streamlit Secrets."
+            "Add OPENAI_API_KEY in Streamlit Secrets."
         )
 
     else:
-
-        quick1, quick2 = st.columns(2)
-
-        if quick1.button(
-            "📍 What should I visit in Pavilion 9?",
-            use_container_width=True
-        ):
-
-            st.session_state[
-                "assistant_prefill"
-            ] = (
-                "¿Qué empresas de mi shortlist "
-                "y otras empresas relevantes "
-                "debería visitar en el pabellón 9?"
-            )
-
-        if quick2.button(
-            "📅 Show my meetings",
-            use_container_width=True
-        ):
-
-            st.session_state[
-                "assistant_prefill"
-            ] = (
-                "¿Qué reuniones tengo y "
-                "cómo debería organizarme?"
-            )
-
         if (
             "assistant_messages"
             not in st.session_state
         ):
-
             st.session_state[
                 "assistant_messages"
             ] = []
+
+        quick1, quick2 = st.columns(2)
+
+        if quick1.button(
+            "📍 Visit plan",
+            use_container_width=True
+        ):
+            st.session_state[
+                "assistant_prefill"
+            ] = (
+                "Organízame las empresas más importantes "
+                "que debería visitar por pabellón."
+            )
+
+        if quick2.button(
+            "📅 My meetings",
+            use_container_width=True
+        ):
+            st.session_state[
+                "assistant_prefill"
+            ] = (
+                "¿Qué reuniones tengo y cómo debería organizarme?"
+            )
 
         for message in (
             st.session_state[
                 "assistant_messages"
             ]
         ):
-
             with st.chat_message(
                 message["role"]
             ):
-
                 st.markdown(
                     message["content"]
                 )
 
-        default_question = (
+        prefill = (
             st.session_state.pop(
                 "assistant_prefill",
                 None
@@ -1924,21 +2048,16 @@ with tab6:
             "Ask about Fruit Attraction..."
         )
 
-        if default_question:
-
-            question = (
-                default_question
-            )
+        if prefill:
+            question = prefill
 
         if question:
-
             st.session_state[
                 "assistant_messages"
             ].append(
                 {
                     "role":
                         "user",
-
                     "content":
                         question,
                 }
@@ -1947,7 +2066,6 @@ with tab6:
             with st.chat_message(
                 "user"
             ):
-
                 st.markdown(
                     question
                 )
@@ -1955,26 +2073,18 @@ with tab6:
             with st.chat_message(
                 "assistant"
             ):
-
                 with st.spinner(
-                    "Checking IFEMA data "
-                    "and the web..."
+                    "Checking IFEMA data and the web..."
                 ):
-
                     try:
-
-                        answer = (
-                            ask_assistant(
-                                question
-                            )
+                        answer = ask_assistant(
+                            question
                         )
 
                     except Exception as e:
-
                         answer = (
-                            "I couldn't complete "
-                            "the search. Error: "
-                            f"{e}"
+                            "I couldn't complete the request. "
+                            f"Error: {e}"
                         )
 
                 st.markdown(
@@ -1987,7 +2097,6 @@ with tab6:
                 {
                     "role":
                         "assistant",
-
                     "content":
                         answer,
                 }
@@ -1999,7 +2108,6 @@ with tab6:
 # ============================================================
 
 with tab7:
-
     st.subheader(
         "Manage Iberia shortlist"
     )
@@ -2008,19 +2116,21 @@ with tab7:
         targets.copy()
     )
 
-    ordered["_rank_num"] = (
-        pd.to_numeric(
-            ordered["rank"],
-            errors="coerce"
-        )
-        .fillna(999)
-    )
+    ordered[
+        "_rank_num"
+    ] = pd.to_numeric(
+        ordered["rank"],
+        errors="coerce"
+    ).fillna(999)
 
-    ordered = ordered.sort_values(
-        [
-            "_rank_num",
-            "company"
-        ]
+    ordered = (
+        ordered
+        .sort_values(
+            [
+                "_rank_num",
+                "company"
+            ]
+        )
     )
 
     st.markdown(
@@ -2029,39 +2139,43 @@ with tab7:
 
     company_to_move = (
         st.selectbox(
-            "Company",
+            "Company to move",
             ordered[
                 "company"
-            ].tolist()
+            ].tolist(),
+            key="reorder_company",
         )
     )
 
-    current_row = ordered[
-        ordered["company"]
-        == company_to_move
-    ]
+    current_rank_row = (
+        ordered[
+            ordered["company"]
+            == company_to_move
+        ]
+    )
 
-    current_rank = 1
+    current_rank_value = (
+        pd.to_numeric(
+            current_rank_row[
+                "rank"
+            ],
+            errors="coerce"
+        )
+    )
 
-    if not current_row.empty:
-
-        numeric_rank = (
-            pd.to_numeric(
-                current_row[
-                    "rank"
-                ],
-                errors="coerce"
-            )
-            .iloc[0]
+    if (
+        not current_rank_row.empty
+        and
+        pd.notna(
+            current_rank_value.iloc[0]
+        )
+    ):
+        current_rank = int(
+            current_rank_value.iloc[0]
         )
 
-        if pd.notna(
-            numeric_rank
-        ):
-
-            current_rank = int(
-                numeric_rank
-            )
+    else:
+        current_rank = 1
 
     new_position = (
         st.number_input(
@@ -2078,16 +2192,15 @@ with tab7:
                     len(ordered)
                 )
             ),
-            step=1
+            step=1,
         )
     )
 
     if st.button(
         "↕️ Move company",
         type="primary",
-        use_container_width=True
+        use_container_width=True,
     ):
-
         reordered = (
             reorder_shortlist(
                 targets,
@@ -2103,13 +2216,13 @@ with tab7:
         )
 
         if success:
-
             st.cache_data.clear()
             st.rerun()
 
         else:
-
-            st.error(message)
+            st.error(
+                message
+            )
 
     st.divider()
 
@@ -2117,20 +2230,22 @@ with tab7:
         "### ✏️ Full edit"
     )
 
-    editable = targets.drop(
-        columns=[
-            "company_key"
-        ],
-        errors="ignore"
-    ).copy()
-
-    editable["_rank_sort"] = (
-        pd.to_numeric(
-            editable["rank"],
-            errors="coerce"
+    editable = (
+        targets.drop(
+            columns=[
+                "company_key"
+            ],
+            errors="ignore"
         )
-        .fillna(999)
+        .copy()
     )
+
+    editable[
+        "_rank_sort"
+    ] = pd.to_numeric(
+        editable["rank"],
+        errors="coerce"
+    ).fillna(999)
 
     editable = (
         editable
@@ -2147,62 +2262,64 @@ with tab7:
         )
     )
 
-    edited = st.data_editor(
-        editable,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="dynamic",
-        height=500,
+    edited = (
+        st.data_editor(
+            editable,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            height=520,
 
-        column_config={
+            column_config={
+                "rank":
+                st.column_config.NumberColumn(
+                    "Rank",
+                    min_value=1,
+                    step=1
+                ),
 
-            "rank":
-            st.column_config.NumberColumn(
-                "Rank",
-                min_value=1,
-                step=1
-            ),
+                "priority":
+                st.column_config.SelectboxColumn(
+                    "Priority",
+                    options=[
+                        "High",
+                        "Medium",
+                        "Low"
+                    ]
+                ),
 
-            "priority":
-            st.column_config.SelectboxColumn(
-                "Priority",
-                options=[
-                    "High",
-                    "Medium",
-                    "Low"
-                ]
-            ),
+                "visited":
+                st.column_config.SelectboxColumn(
+                    "Visited",
+                    options=[
+                        "No",
+                        "Yes"
+                    ]
+                ),
 
-            "visited":
-            st.column_config.SelectboxColumn(
-                "Visited",
-                options=[
-                    "No",
-                    "Yes"
-                ]
-            ),
+                "why_interesting":
+                st.column_config.TextColumn(
+                    "Why relevant",
+                    width="large"
+                ),
 
-            "why_interesting":
-            st.column_config.TextColumn(
-                "Why relevant",
-                width="large"
-            ),
-
-            "notes":
-            st.column_config.TextColumn(
-                "Notes",
-                width="large"
-            ),
-        },
+                "notes":
+                st.column_config.TextColumn(
+                    "Notes",
+                    width="large"
+                ),
+            },
+        )
     )
 
     if st.button(
         "💾 Save shortlist changes",
         type="primary",
-        use_container_width=True
+        use_container_width=True,
     ):
-
-        edited["rank"] = (
+        edited[
+            "rank"
+        ] = (
             pd.to_numeric(
                 edited["rank"],
                 errors="coerce"
@@ -2212,6 +2329,13 @@ with tab7:
             .astype(str)
         )
 
+        edited = edited[
+            ~edited["company"]
+            .apply(
+                is_excluded_from_shortlist
+            )
+        ].copy()
+
         success, message = (
             save_to_github(
                 edited
@@ -2219,13 +2343,13 @@ with tab7:
         )
 
         if success:
-
             st.cache_data.clear()
             st.rerun()
 
         else:
-
-            st.error(message)
+            st.error(
+                message
+            )
 
 
 # ============================================================
@@ -2235,7 +2359,8 @@ with tab7:
 st.divider()
 
 st.caption(
-    "IFEMA catalogue checked hourly · "
+    "IFEMA catalogue re-checked hourly "
+    "while the app is active · "
     f"Session refreshed "
     f"{datetime.now().strftime('%d %b %Y %H:%M')}"
 )
