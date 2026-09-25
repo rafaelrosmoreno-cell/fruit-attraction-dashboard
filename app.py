@@ -94,17 +94,75 @@ st.markdown(
     """
 <style>
 
+/* ---------- GENERAL ---------- */
+
 .block-container {
-    padding-top: 1rem;
-    padding-bottom: 2.5rem;
-    max-width: 1500px;
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    max-width: 1450px;
 }
 
-div[data-testid="stMetric"] {
-    border: 1px solid #e5e7eb;
-    padding: 14px;
-    border-radius: 12px;
+/* ---------- HEADER ---------- */
+
+.fa-header {
+    margin-bottom: 18px;
 }
+
+.fa-title {
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1.08;
+    font-weight: 750;
+    margin: 0;
+    padding: 0;
+    color: #272b38;
+}
+
+.fa-subtitle {
+    margin-top: 9px;
+    font-size: 15px;
+    color: #777b85;
+}
+
+/* ---------- KPI GRID ---------- */
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+.kpi-card {
+    border: 1px solid #e1e4e8;
+    border-radius: 14px;
+    padding: 16px 18px;
+    background: white;
+    min-width: 0;
+}
+
+.kpi-label {
+    font-size: 14px;
+    color: #50545d;
+    margin-bottom: 5px;
+}
+
+.kpi-value {
+    font-size: 34px;
+    line-height: 1.1;
+    font-weight: 500;
+    color: #272b38;
+}
+
+.refresh-text {
+    font-size: 13px;
+    color: #8a8d94;
+    margin-top: 10px;
+}
+
+/* ---------- OTHER STREAMLIT ---------- */
 
 div[data-testid="stDataFrame"] {
     overflow-x: auto;
@@ -114,48 +172,77 @@ div[data-testid="stDataFrame"] {
     border-radius: 10px;
 }
 
+
+/* ==========================================================
+   MOBILE
+   ========================================================== */
+
 @media (max-width: 768px) {
 
     .block-container {
-        padding-top: 0.5rem;
-        padding-left: 0.75rem;
-        padding-right: 0.75rem;
-        padding-bottom: 2rem;
+        padding-top: 0.55rem !important;
+        padding-left: 0.7rem !important;
+        padding-right: 0.7rem !important;
+        padding-bottom: 1.5rem !important;
     }
 
-    h1 {
-        font-size: 28px !important;
-        line-height: 1.15 !important;
-        margin-bottom: 0.25rem !important;
+    .fa-header {
+        margin-bottom: 10px;
     }
 
-    div[data-testid="stCaptionContainer"] p {
-        font-size: 12px !important;
-        line-height: 1.3 !important;
+    .fa-title {
+        font-size: 29px !important;
+        line-height: 1.05 !important;
+        white-space: normal !important;
+        word-break: normal !important;
     }
 
-    div[data-testid="stMetric"] {
-        padding: 9px;
+    .fa-subtitle {
+        font-size: 12px;
+        margin-top: 7px;
+        line-height: 1.3;
     }
 
-    div[data-testid="stMetricLabel"] p {
-        font-size: 11px !important;
+    .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
     }
 
-    div[data-testid="stMetricValue"] {
-        font-size: 22px !important;
+    .kpi-card {
+        padding: 11px 12px;
+        border-radius: 11px;
+    }
+
+    .kpi-label {
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .kpi-value {
+        font-size: 25px;
+    }
+
+    .refresh-text {
+        font-size: 10px;
+        line-height: 1.25;
     }
 
     button[data-baseweb="tab"] {
-        padding-left: 8px !important;
-        padding-right: 8px !important;
-        font-size: 12px !important;
-        white-space: nowrap;
+        padding-left: 7px !important;
+        padding-right: 7px !important;
+        font-size: 11px !important;
+        white-space: nowrap !important;
     }
 
     div[data-baseweb="tab-list"] {
-        overflow-x: auto;
-        scrollbar-width: thin;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none;
+    }
+
+    div[data-baseweb="tab-list"]::-webkit-scrollbar {
+        display: none;
     }
 
     .stButton > button {
@@ -164,11 +251,28 @@ div[data-testid="stDataFrame"] {
     }
 }
 
+
+/* Extra-small phones */
+
+@media (max-width: 390px) {
+
+    .fa-title {
+        font-size: 26px !important;
+    }
+
+    .fa-subtitle {
+        font-size: 11px;
+    }
+
+    .kpi-value {
+        font-size: 23px;
+    }
+}
+
 </style>
 """,
     unsafe_allow_html=True,
 )
-
 # ============================================================
 # HELPERS
 # ============================================================
